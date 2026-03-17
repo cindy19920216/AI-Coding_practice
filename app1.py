@@ -79,23 +79,28 @@ if df is not None and not df.empty:
     fig.update_layout(template="plotly_dark", height=600, xaxis_rangeslider_visible=False)
     st.plotly_chart(fig, use_container_width=True)
 
-    # 3. 최신 뉴스 섹션 (번역 추가)
-    st.subheader(f"📰 {ticker} ")
+   # 3. 최신 뉴스 섹션 (에러 방지 로직 추가)
+    st.subheader(f"📰 {ticker} 최신 뉴스 ")
     stock = yf.Ticker(ticker)
-    news = stock.news
     
-    if news:
-        for item in news[:5]:
-            with st.container():
-                original_title = item['title']
-                # 실시간 번역 수행
-                translated_title = translate_text(original_title)
+    try:
+        news = stock.news
+        if news:
+            for item in news[:5]:
+                # .get()을 사용하면 데이터가 없어도 에러가 나지 않고 None을 반환합니다.
+                original_title = item.get('title') or item.get('summary') # 제목이 없으면 요약이라도 가져옴
                 
-                st.write(f"**🇰🇷 {translated_title}**")
-                st.caption(f"원문: {original_title}")
-                st.write(f"출처: {item['publisher']} | [기사 원문 읽기]({item['link']})")
-                st.write("---")
-    else:
-        st.write("관련 뉴스를 찾을 수 없습니다.")
-else:
-    st.error("데이터 로드 실패.")
+                if original_title:
+                    with st.container():
+                        translated_title = translate_text(original_title)
+                        st.write(f"**🇰🇷 {translated_title}**")
+                        st.caption(f"원문: {original_title}")
+                        
+                        link = item.get('link', '#')
+                        publisher = item.get('publisher', 'Unknown')
+                        st.write(f"출처: {publisher} | [기사 원문 읽기]({link})")
+                        st.write("---")
+        else:
+            st.info("현재 표시할 수 있는 최신 뉴스가 없습니다.")
+    except Exception as e:
+        st.warning("뉴스 데이터를 가져오는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
