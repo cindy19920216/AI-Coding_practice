@@ -2,3 +2,4 @@ yfinance
 pandas
 plotly
 deep-translator
+feedparser
