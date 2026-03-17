@@ -80,7 +80,7 @@ if df is not None and not df.empty:
     st.plotly_chart(fig, use_container_width=True)
 
     # 3. 최신 뉴스 섹션 (번역 추가)
-    st.subheader(f"📰 {ticker} 최신 뉴스 (자동 번역)")
+    st.subheader(f"📰 {ticker} ")
     stock = yf.Ticker(ticker)
     news = stock.news
     
