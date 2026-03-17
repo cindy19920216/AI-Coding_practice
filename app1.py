@@ -18,35 +18,39 @@ st.markdown("""
         font-family: 'Nanum Gothic', sans-serif;
         font-size: 0.8rem !important;
     }
-    h1 { font-size: 2.2rem !important; font-weight: 700; margin-bottom: 0px; }
-    /* 버튼 스타일 커스텀 */
+    h1 { font-size: 2.2rem !important; font-weight: 700; margin-bottom: 10px; }
     .stButton>button {
         width: 100%;
         border-radius: 5px;
         background-color: #FF4B4B;
         color: white;
+        font-weight: bold;
     }
     </style>
     """, unsafe_allow_html=True)
 
 # 사이드바 설정
 st.sidebar.header("⚙️ 설정")
-# 입력 기능을 수행할 배너/버튼 구조
 ticker_input = st.sidebar.text_input("티커 입력 (예: 005930.KS, AAPL)", value="005930.KS")
 days = st.sidebar.slider("분석 기간(일)", 30, 730, 365)
-run_button = st.sidebar.button("🚀 분석 시작") # 분석 시작 버튼
+run_button = st.sidebar.button("🚀 분석 시작")
 
-# 기능 함수들
+# --- 기능 함수 ---
 def translate_text(text, target_lang='ko'):
     try:
         if any(ord('가') <= ord(char) <= ord('힣') for char in text): return text
         return GoogleTranslator(source='auto', target=target_lang).translate(text)
     except: return text
 
-def get_korean_news(search_term):
+def get_latest_korean_news(search_term):
+    """최신순으로 정렬된 구글 뉴스를 가져옵니다."""
     encoded_search = urllib.parse.quote(search_term)
-    rss_url = f"https://news.google.com/rss/search?q={encoded_search}&hl=ko&gl=KR&ceid=KR:ko"
-    return feedparser.parse(rss_url).entries[:5]
+    # q=키워드 뒤에 'when:7d'를 붙여 최근 7일 이내 뉴스만 타겟팅하거나, RSS 자체 정렬을 활용합니다.
+    rss_url = f"https://news.google.com/rss/search?q={encoded_search}+when:7d&hl=ko&gl=KR&ceid=KR:ko"
+    feed = feedparser.parse(rss_url)
+    # 뉴스 게시물들을 날짜순(최신순)으로 다시 한 번 정렬
+    sorted_entries = sorted(feed.entries, key=lambda x: x.published_parsed, reverse=True)
+    return sorted_entries[:5]
 
 def calculate_rsi(data, window=14):
     delta = data.diff()
@@ -82,47 +86,58 @@ if df is not None and not df.empty:
     df['RSI'] = calculate_rsi(df['Close'])
     current_rsi = df['RSI'].iloc[-1]
 
-    # RSI 상태 판별
-    if current_rsi >= 70: rsi_status = "⚠️ 과매수 구간"
-    elif current_rsi <= 30: rsi_status = "✅ 과매도 구간"
-    else: rsi_status = "⚖️ 보통"
+    # RSI 상태 판별 (아이콘 제거 및 텍스트만 표시)
+    if current_rsi >= 70: rsi_status = "과매수 구간"
+    elif current_rsi <= 30: rsi_status = "과매도 구간"
+    else: rsi_status = "보통"
 
-    # 2) 대시보드 제목을 기업 이름만 표시
+    # 기업 이름만 제목으로 표시
     st.title(f"{company_full_name}")
 
-    # 3) 주가 및 이평선 제목 지우기 (subplot_titles 수정)
+    # 차트 구성
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, 
                         vertical_spacing=0.05, 
-                        # RSI 차트 옆에 단어 표시 (부제목 활용)
+                        # RSI 차트 제목을 우측 정렬 느낌으로 배치
                         subplot_titles=("", f"RSI: {current_rsi:.2f} ({rsi_status})"),
                         row_width=[0.3, 0.7])
 
-    # 캔들스틱 (상승 빨강 / 하락 파랑)
+    # 1. 캔들스틱
     fig.add_trace(go.Candlestick(
         x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
         name='가격', increasing_line_color='#FF3232', decreasing_line_color='#0066FF'
     ), row=1, col=1)
     
-    # 이평선
+    # 2. 이평선
     ma_colors = {'MA5': '#FF4500', 'MA20': '#1E90FF', 'MA60': '#32CD32', 'MA120': '#FF69B4'}
     for ma, color in ma_colors.items():
         fig.add_trace(go.Scatter(x=df.index, y=df[ma], line=dict(color=color, width=1.2), name=ma), row=1, col=1)
 
-    # RSI (파랑, 1pt)
+    # 3. RSI (노란색으로 변경)
     fig.add_trace(go.Scatter(
-        x=df.index, y=df['RSI'], line=dict(color='#0000FF', width=1), name='RSI'
+        x=df.index, y=df['RSI'], 
+        line=dict(color='#FFD700', width=1), # 노란색(Gold) 적용
+        name='RSI'
     ), row=2, col=1)
     
     fig.add_hline(y=70, line_dash="dash", line_color="red", row=2, col=1)
     fig.add_hline(y=30, line_dash="dash", line_color="blue", row=2, col=1)
 
-    fig.update_layout(template="plotly_white", height=650, xaxis_rangeslider_visible=False, margin=dict(t=30))
+    # 현재 RSI 수치를 그래프 우측 끝에 텍스트로 표시
+    fig.add_annotation(
+        x=df.index[-1], y=current_rsi,
+        text=f" {current_rsi:.1f}",
+        showarrow=False, xanchor="left",
+        font=dict(color="#FFD700", size=12),
+        row=2, col=1
+    )
+
+    fig.update_layout(template="plotly_white", height=650, xaxis_rangeslider_visible=False, margin=dict(t=50))
     st.plotly_chart(fig, use_container_width=True)
 
-    # 뉴스 섹션
+    # 4. 뉴스 섹션 (최신순 5개 반영)
     st.subheader(f"📰 관련 최신 뉴스")
     search_keyword = company_full_name if ".KS" in ticker_input or ".KQ" in ticker_input else ticker_input
-    news_items = get_korean_news(search_keyword)
+    news_items = get_latest_korean_news(search_keyword)
     
     if news_items:
         for item in news_items:
@@ -131,5 +146,7 @@ if df is not None and not df.empty:
                 st.write(f"**🔗 {display_title}**")
                 st.write(f"게시일: {item.published} | [기사 보기]({item.link})")
                 st.write("---")
+    else:
+        st.write("최근 7일 내 관련 뉴스가 없습니다.")
 else:
     st.error("데이터 로드 실패.")
