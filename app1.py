@@ -21,7 +21,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("📈 스마트 주식 분석 대시보드 (번역 기능 포함)")
+st.title("📈 JS 주식 분석 대시보드 ")
 
 # 사이드바 설정
 ticker = st.sidebar.text_input("티커 입력 (예: AAPL, 005930.KS)", value="AAPL")
