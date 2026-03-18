@@ -19,7 +19,7 @@ family_members = [
 ]
 
 def show_login_screen():    
-    st.markdown("<h1 style='text-align:center;'>누가 오셨나요?</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center;'>누가 오셨나요?</h1></h1>", unsafe_allow_html=True)
     
     # 가족 버튼들을 가로로 배치
     cols = st.columns(len(family_members))
@@ -30,7 +30,7 @@ def show_login_screen():
                 st.rerun()
                 
     st.write("")
-    if st.button("📸 일상 공유하기 (가족 피드) ❯", key="go_sns_tab", use_container_width=True):
+    if st.button("📸 일상 공유하기 ❯", key="go_sns_tab", use_container_width=True):
         st.session_state['current_page'] = 'FamilySNS'
         st.rerun()
 
@@ -40,7 +40,7 @@ def show_login_screen():
         st.markdown("### 🌤️ 오늘의 날씨")
         st.info("현재 서울은 맑음! 기분 좋은 하루 보내세요.")
         st.markdown("#### 💌 오늘의 한마디")
-        st.warning("✨ '재선'님, 오늘 하루도 반짝반짝 빛나길 응원해요!")
+        st.warning("✨ 오늘 하루도 반짝반짝 빛나길 응원해요!")
     with col_img:
         st.write("# 🌞")
 
@@ -113,8 +113,8 @@ else:
     """, unsafe_allow_html=True)
     
     st.write("")
-    st.markdown(f"## {user['emoji']} {user['name']} 전문가님 모드")
+    st.markdown(f"## {user['emoji']} {user['name']} 전문가님")
     
-    if st.button("로그아웃"): 
+    if st.button("돌아가기"): 
         st.session_state['user_id'] = None
         st.rerun()
