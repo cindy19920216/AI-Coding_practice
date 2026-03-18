@@ -1,7 +1,7 @@
 import streamlit as st
 from datetime import datetime
 
-# --- 1. 디자인 고정 (한 줄 배치 & 크기 강제 유지) ---
+# --- 1. 디자인 고정 (올 화이트 아이콘 & 한 줄 배치 강제 유지) ---
 st.set_page_config(page_title="우리 가족 스마트 금융", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
@@ -17,10 +17,10 @@ st.markdown("""
 
     /* 버튼 디자인: 한 줄에 있어도 크기가 죽지 않게 설정 */
     div.stButton > button {
-        background-color: #1F1F1F !important;
+        background-color: #1F1F1F !important; /* 약간 밝은 회색으로 카드 구분 */
         border: 2px solid transparent !important;
         border-radius: 12px !important;
-        color: white !important;
+        color: white !important; /* 글씨 하얗게 */
         transition: all 0.2s ease-in-out !important;
         width: 100% !important;
         display: block !important;
@@ -36,7 +36,7 @@ st.markdown("""
         font-weight: 700 !important;
     }
 
-    /* 이모지(아이콘) 크기: 카드 안에서 꽉 차게 */
+    /* 이모지(아이콘) 크기: 카드 안에서 꽉 차게, 하얗게 (자동 반영) */
     div.stButton > button[key^="sel_"] p {
         font-size: 55px !important; 
         margin-bottom: 5px !important;
@@ -85,6 +85,7 @@ def show_login_screen():
     cols = st.columns(5, gap="small")
     for i, m in enumerate(family_members):
         with cols[i]:
+            # 올 화이트 이모지와 이름을 버튼 라벨로 사용 (에러 방지)
             if st.button(f"{m['emoji']}\n{m['name']}", key=f"sel_{m['id']}"):
                 st.session_state['user_id'] = m['id']
                 st.rerun()
