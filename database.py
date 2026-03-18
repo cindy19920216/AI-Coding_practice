@@ -23,3 +23,12 @@ def save_data(name, emoji, msg):
         return True
     except:
         return False
+# database.py에 추가
+def get_market_indices():
+    # 2026-03-18 현재 예시 데이터 (실제 서비스 시 API 연동 권장)
+    return {
+        "KOSPI": "5,801.61 (▲2.86%)",
+        "KOSDAQ": "1,155.27 (▲1.61%)",
+        "USD/KRW": "1,486.20 (▼7.40)",
+        "SUPPLY": "외인 매도 668억 / 기관 매수 672억"
+    }
