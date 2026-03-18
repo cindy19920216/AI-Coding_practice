@@ -1,72 +1,40 @@
 import streamlit as st
 from datetime import datetime
 
-# --- 1. 디자인 고정 (5인 한 줄 & 여백 삭제 & 화이트 카드) ---
-st.set_page_config(page_title="우리 가족 스마트 금융", layout="wide", initial_sidebar_state="collapsed")
-
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;700&display=swap');
-    html, body, [class*="css"] { font-family: 'Pretendard', sans-serif; background-color: #F2F4F6; }
-    
-    /* [핵심] 모바일 화면에서 좌우 여백을 최소화하여 5명이 꽉 차게 함 */
+    /* 1. 컨테이너 너비를 모바일 가로폭에 딱 맞춤 */
     .main .block-container { 
-        max-width: 100% !important; 
-        padding-left: 10px !important; 
-        padding-right: 10px !important; 
-        padding-top: 2rem !important; 
+        max-width: 500px !important; 
+        padding-left: 1.5rem !important; 
+        padding-right: 1.5rem !important; 
     }
 
-    /* 버튼 디자인: 너비를 100%로 설정하여 컬럼을 꽉 채움 */
-    div.stButton > button {
-        background-color: white !important;
-        border: 1px solid #e5e8eb !important;
-        border-radius: 16px !important;
-        color: #191f28 !important;
-        transition: all 0.2s ease-in-out !important;
-        width: 100% !important; /* 컬럼 너비에 맞게 꽉 채움 */
-        display: block !important;
-        white-space: pre-line !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.02) !important;
-        padding: 10px 5px !important;
-    }
-
-    /* 1. 프로필 카드: 5인 배치 시 최적의 높이와 폰트 크기 */
+    /* 2. 버튼을 가로로 꽉 차는 와이드 카드로 변경 */
     div.stButton > button[key^="sel_"] {
-        height: 120px !important; /* 5개 나열 시 너무 높으면 답답하므로 적절히 조절 */
+        height: 100px !important; /* 높이는 적당히 유지 */
+        width: 100% !important;   /* 가로폭을 100%로 꽉 채움 */
+        display: flex !important;
+        flex-direction: row !important; /* 이모지와 이름을 가로로 배치 */
+        align-items: center !important;
+        justify-content: flex-start !important; /* 왼쪽 정렬 */
+        padding-left: 25px !important;
+        margin-bottom: 12px !important;
     }
 
-    /* 이모지 크기: 5개 나열 시 적당히 큼직하게 (45px) */
+    /* 3. 이모지 크기 및 간격 조정 */
     div.stButton > button[key^="sel_"] p {
-        font-size: 40px !important; 
-        margin-bottom: 5px !important;
-        display: block !important;
+        font-size: 35px !important; 
+        margin-right: 20px !important;
+        margin-bottom: 0px !important;
     }
-
-    /* 이름 폰트: 5개 나열 시 깨지지 않도록 적당한 크기 (14px) */
+    
+    /* 4. 이름 폰트 크기 확대 */
     div.stButton > button[key^="sel_"] {
-        font-size: 14px !important;
-        font-weight: 700 !important;
+        font-size: 20px !important;
     }
-
-    /* 2. 하단 일상 공유하기 배너: 가로로 길게 꽉 채움 */
-    div.stButton > button[key="go_sns_tab"] {
-        height: 90px !important;
-        text-align: left !important;
-        padding-left: 20px !important;
-        margin-top: 20px !important;
-    }
-
-    /* 호버 효과 */
-    div.stButton > button:hover {
-        border-color: #3182f6 !important;
-        background-color: #F9FAFB !important;
-    }
-
-    .main-title { color: #191f28; text-align: center; font-size: 24px; margin-bottom: 30px; font-weight: 700; }
     </style>
-    """, unsafe_allow_html=True)
-
+""", unsafe_allow_html=True)
 # --- 2. 데이터 및 세션 관리 ---
 if 'user_id' not in st.session_state: st.session_state['user_id'] = None
 if 'current_page' not in st.session_state: st.session_state['current_page'] = 'Home'
