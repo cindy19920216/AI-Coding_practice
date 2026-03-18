@@ -4,11 +4,11 @@ from datetime import datetime
 
 # [수정됨] 읽기용 URL: 시트의 실제 ID를 사용해야 합니다.
 # 전문가님의 시트 ID: 1zTU8HRcaA79bSDgqOA7yYlkXXbC3OcJaBz9x511C1PQ
-SHEET_ID = "1zTU8HRcaA79bSDgqOA7yYlkXXbC3OcJaBz9x511C1PQ"
+SHEET_ID = "AKfycbydzgeiB1izZx3AX9RN8yOtiPzi2bWe3SI_f76LEA0G6Qo6BgJNwAJ-HI1vTADCYw2t"
 READ_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv"
 
 # [유지] 쓰기용 Apps Script URL (이건 그대로 쓰시면 됩니다)
-API_URL = "https://script.google.com/macros/s/AKfycby0Rbs5eL_gxbBuNMZiaOk3Y2jG8QXwIqNbpCEKcPLSr2sC8hW-rt7tpYMFjXPqpxV5/exec"
+API_URL = "https://script.google.com/macros/s/AKfycbydzgeiB1izZx3AX9RN8yOtiPzi2bWe3SI_f76LEA0G6Qo6BgJNwAJ-HI1vTADCYw2t/exec"
 
 def load_data():
     try:
