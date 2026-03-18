@@ -3,7 +3,7 @@ from datetime import datetime
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 
-# --- 1. 디자인 (전문가님 5인 와이드 스타일 유지) ---
+# --- 1. 디자인 고정 (전문가님 5인 와이드 스타일) ---
 st.set_page_config(page_title="우리 가족 스마트 금융", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
@@ -36,27 +36,41 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. 구글 시트 연결 설정 ---
-# 전문가님이 만드신 시트 ID가 반영되었습니다.
+# --- 2. 구글 시트 연결 (에러 방지용) ---
+# 전문가님이 만드신 시트 ID 반영
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1zTU8HRcaA79bSDgqOA7yYlkXXbC3OcJaBz9x511C1PQ/edit#gid=0"
+
+# 연결 인터페이스 (기존 방식 유지하되 업데이트 로직 강화)
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def get_data():
+def load_feed():
     try:
-        # 시트에서 데이터 로드 (캐시를 없애기 위해 ttl=0 설정)
-        return conn.read(spreadsheet=SHEET_URL, ttl=0)
+        # 캐시 없이 실시간으로 읽기
+        df = conn.read(spreadsheet=SHEET_URL, ttl=0)
+        return df
     except:
         return pd.DataFrame(columns=["name", "emoji", "msg", "time"])
 
-def save_data(name, emoji, msg):
-    df = get_data()
-    time_now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    new_data = pd.DataFrame([{"name": name, "emoji": emoji, "msg": msg, "time": time_now}])
-    updated_df = pd.concat([df, new_data], ignore_index=True)
-    # 시트에 최종 업데이트 (영구 저장)
-    conn.update(spreadsheet=SHEET_URL, data=updated_df)
+def post_msg(name, emoji, msg):
+    try:
+        existing_data = load_feed()
+        new_row = pd.DataFrame([{
+            "name": name, 
+            "emoji": emoji, 
+            "msg": msg, 
+            "time": datetime.now().strftime("%Y-%m-%d %H:%M")
+        }])
+        updated_df = pd.concat([existing_data, new_row], ignore_index=True)
+        
+        # 핵심: update 메서드 에러를 피하기 위해 명시적으로 시트 지정
+        conn.update(spreadsheet=SHEET_URL, data=updated_df)
+        st.cache_data.clear() # 캐시 강제 삭제
+        return True
+    except Exception as e:
+        st.error(f"저장 중 오류 발생: {e}")
+        return False
 
-# --- 3. 세션 및 가족 데이터 ---
+# --- 3. 데이터 및 세션 ---
 if 'user_id' not in st.session_state: st.session_state['user_id'] = None
 if 'current_page' not in st.session_state: st.session_state['current_page'] = 'Home'
 if 'speaking_id' not in st.session_state: st.session_state['speaking_id'] = None
@@ -69,10 +83,10 @@ family_members = [
     {"id": "seunggyu", "name": "승규", "emoji": "👦🏻"}
 ]
 
-# --- 4. 화면 구현 ---
+# --- 4. 화면 로직 ---
 
 def show_login_screen():
-    st.markdown("<h1 style='text-align: center; color: #191f28; font-size: 26px;'>누가 오셨나요?</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center;'>누가 오셨나요?</h1>", unsafe_allow_html=True)
     for m in family_members:
         if st.button(f"{m['emoji']}  {m['name']}", key=f"sel_{m['id']}"):
             st.session_state['user_id'] = m['id']; st.rerun()
@@ -95,22 +109,22 @@ def show_sns_page():
                 st.session_state['speaking_id'] = m['id']; st.rerun()
 
         if st.session_state['speaking_id'] == m['id']:
+            # 폼을 사용하여 전송 후 새로고침 유도
             with st.form(key=f"form_{m['id']}", clear_on_submit=True):
-                msg = st.text_input("메시지 입력", placeholder="오늘 어떤 일이 있었나요?", label_visibility="collapsed")
+                msg = st.text_input("메시지 입력", placeholder="소식을 남겨주세요", label_visibility="collapsed")
                 if st.form_submit_button("가족과 공유"):
                     if msg:
-                        save_data(m['name'], m['emoji'], msg)
-                        st.session_state['speaking_id'] = None
-                        st.success("시트에 기록되었습니다!")
-                        st.rerun()
+                        if post_msg(m['name'], m['emoji'], msg):
+                            st.session_state['speaking_id'] = None
+                            st.rerun()
         st.markdown("<div style='margin-bottom:10px;'></div>", unsafe_allow_html=True)
 
     st.markdown("---")
     st.subheader("💬 실시간 가족 피드")
     
-    df = get_data()
+    df = load_feed()
     if not df.empty:
-        # 최신 대화가 위로 오도록 역순 출력
+        # 역순 정렬 (최신순)
         for _, row in df.iloc[::-1].head(15).iterrows():
             st.markdown(f"""
                 <div class="feed-card">
