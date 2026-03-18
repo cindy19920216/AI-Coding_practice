@@ -137,6 +137,9 @@ def show_sns_page():
     st.title("📸 가족 일상 공유")
     st.write("가족들과 오늘 하루를 공유해 보세요!")
     # 여기에 추후 메시지 입력/출력 기능 추가 예정
+if st.button("", key="go_sns_fixed"):
+        st.session_state['current_page'] = 'FamilySNS'
+        st.rerun()
 
 # --- 4. 메인 컨트롤러 ---
 if st.session_state['user_id'] is None:
