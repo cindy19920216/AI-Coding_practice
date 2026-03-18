@@ -24,3 +24,23 @@ def apply_styles():
         .feed-card { background: white; padding: 15px; border-radius: 18px; margin-bottom: 12px; border: 1px solid #e5e8eb; }
         </style>
     """, unsafe_allow_html=True)
+# styles.py의 CSS 안에 추가
+        @keyframes ticker {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
+        .ticker-wrapper {
+            background: #191f28;
+            color: #00ff00; /* 전광판 느낌의 초록색 */
+            padding: 8px 0;
+            overflow: hidden;
+            white-space: nowrap;
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
+        .ticker-text {
+            display: inline-block;
+            animation: ticker 20s linear infinite;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+        }
