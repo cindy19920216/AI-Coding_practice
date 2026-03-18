@@ -17,21 +17,7 @@ family_members = [
     {"id": "seunggyu", "name": "승규", "emoji": "👦🏻"}
 ]
 
-def show_login_screen():
-    # app.py의 show_login_screen 함수 하단에 추가
-    st.markdown("---") # 구분선
-    
-    # 우측 빈 공간을 채울 위젯 구성
-    col_info, col_img = st.columns([2, 1])
-    with col_info:
-        st.markdown("### 🌤️ 오늘의 가족 날씨")
-        st.info("현재 서울은 맑음! 기분 좋은 하루 보내세요.")
-        st.markdown("#### 💌 오늘의 한마디")
-        st.warning("✨ '재선'님, 오늘 하루도 반짝반짝 빛나길 응원해요!")
-    with col_img:
-        # 여기에 귀여운 가족 캐릭터나 날씨 아이콘 배치
-        st.write("🌞")
-    
+def show_login_screen():    
     st.markdown("<h1 style='text-align:center;'>누가 오셨나요?</h1>", unsafe_allow_html=True)
     for m in family_members:
         if st.button(f"{m['emoji']}  {m['name']}", key=f"sel_{m['id']}"):
@@ -39,6 +25,20 @@ def show_login_screen():
     st.write("")
     if st.button("📸   일상 공유하기\n\n오늘 가족들에게 하고 싶은 말이 있나요?       ❯", key="go_sns_tab"):
         st.session_state['current_page'] = 'FamilySNS'; st.rerun()
+    # app.py의 show_login_screen 함수 하단에 추가
+    st.markdown("---") # 구분선
+    
+    # 우측 빈 공간을 채울 위젯 구성
+    col_info, col_img = st.columns([2, 1])
+    with col_info:
+        st.markdown("### 🌤️ 오늘의 날씨")
+        st.info("현재 서울은 맑음! 기분 좋은 하루 보내세요.")
+        st.markdown("#### 💌 오늘의 한마디")
+        st.warning("✨ '재선'님, 오늘 하루도 반짝반짝 빛나길 응원해요!")
+    with col_img:
+        # 여기에 귀여운 가족 캐릭터나 날씨 아이콘 배치
+        st.write("🌞")
+
 
 def show_sns_page():
     if st.button("❮ 홈으로 돌아가기", key="back_home"):
