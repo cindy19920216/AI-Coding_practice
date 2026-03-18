@@ -1,125 +1,150 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
-from deep_translator import GoogleTranslator
-import feedparser
-import urllib.parse
-import time
 
-# --- 1. 페이지 설정 및 토스/모바일 스타일 CSS ---
-st.set_page_config(page_title="매니저 JS", layout="wide", initial_sidebar_state="collapsed")
+# --- 1. 토스 익스클루시브 디자인 (CSS) ---
+st.set_page_config(page_title="우리 가족 스마트 금융", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&display=swap');
-    html, body, [class*="css"] { font-family: 'Nanum Gothic', sans-serif; background-color: #f2f4f6; }
+    @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;700&display=swap');
     
-    /* 메인페이지 카드 스타일 */
-    .main-card {
-        background-color: Black;
-        border-radius: 15px;
-        padding: 30px;
-        border: 1px solid #e5e8eb;
-        text-align: center;
-        transition: transform 0.2s, box-shadow 0.2s;
+    /* 전체 배경색 및 폰트 설정 (토스 전용 프리텐다드 폰트 느낌) */
+    html, body, [class*="css"] { 
+        font-family: 'Pretendard', -apple-system, sans-serif !important;
+        background-color: #F2F4F6 !important; /* 토스 배경색 */
+    }
+
+    /* 메인 컨테이너 여백 조절 */
+    .main .block-container { padding-top: 2rem; max-width: 800px; }
+
+    /* 토스형 섹션 카드 */
+    .toss-card {
+        background-color: white;
+        border-radius: 24px;
+        padding: 24px;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        transition: all 0.2s ease-in-out;
+        border: none;
         cursor: pointer;
-        height: 100%;
-        margin-bottom: 15px;
     }
-    .main-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.05);
-        border-color: #3182f6;
+    .toss-card:hover {
+        background-color: #EBF4FF; /* 살짝 푸른 빛 도는 하이라이트 */
+        transform: scale(1.02);
     }
-    .card-icon { font-size: 3rem; margin-bottom: 15px; }
-    .card-title { font-size: 1.3rem; font-weight: 700; color: #191f28; margin-bottom: 8px; }
-    .card-desc { font-size: 0.9rem; color: #8b95a1; line-height: 1.4; }
-
-    /* 기존 퀀트 카드 스타일 (유지) */
-    .metric-card { background-color: white; border-radius: 15px; padding: 20px; border: 1px solid #e5e8eb; text-align: center; height: 100px; }
-    .metric-value { font-size: 1.4rem; font-weight: 700; color: #333d4b; margin-top: 5px; }
-    .metric-label { font-size: 0.85rem; color: #8b95a1; }
-
-    /* 버튼 스타일 */
-    .stButton>button { width: 100%; border-radius: 10px; background-color: #3182f6; color: white; font-weight: bold; height: 3rem; border: none; }
     
-    /* 제목 스타일 */
-    h1 { font-size: 2.2rem !important; font-weight: 700; color: #191f28; margin-bottom: 20px; }
-    h2 { font-size: 1.6rem !important; font-weight: 700; color: #333d4b; margin-top: 20px; }
+    .icon-box {
+        width: 56px;
+        height: 56px;
+        background-color: #F9FAFB;
+        border-radius: 16px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 28px;
+        margin-right: 20px;
+    }
+
+    .text-box { flex-grow: 1; text-align: left; }
+    .title-text { font-size: 18px; font-weight: 700; color: #191F28; margin-bottom: 4px; }
+    .desc-text { font-size: 14px; color: #8B95A1; }
+    .arrow-icon { color: #B0B8C1; font-size: 20px; }
+
+    /* 버튼 숨기기 및 커스텀 클릭 처리용 스타일 */
+    .stButton>button {
+        background: transparent; border: none; padding: 0; width: 100%; height: auto;
+    }
+    .stButton>button:hover { background: transparent; border: none; }
+    
+    /* 상단 배너 */
+    .header-banner {
+        padding: 20px 0;
+        margin-bottom: 20px;
+    }
+    .user-name { font-size: 24px; font-weight: 700; color: #191F28; }
+    .sub-greeting { font-size: 16px; color: #4E5968; margin-top: 4px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. 앱 내 세션 상태 (Navigation) 설정 ---
-# 사용자가 어떤 페이지에 있는지 기억하는 변수입니다.
+# --- 2. 페이지 내비게이션 로직 ---
 if 'current_page' not in st.session_state:
-    st.session_state['current_page'] = 'Home' # 처음 키면 홈화면
+    st.session_state['current_page'] = 'Home'
 
-# 페이지 이동 함수
 def move_to(page_name):
     st.session_state['current_page'] = page_name
-    st.rerun() # 화면을 다시 그려서 페이지 이동 효과를 냅니다.
+    st.rerun()
 
-# --- 3. 각 페이지별 기능 정의 (함수화) ---
-
-# A. 메인페이지 (홈화면)
+# --- 3. 홈화면 구성 (토스 UI) ---
 def show_home():
-    st.title("우리가족 금융 Dashboard")
-    st.markdown("<h2 style='text-align:center; color:#8b95a1;'>♡ </h2><br>", unsafe_allow_html=True)
+    # 상단 인사말
+    st.markdown("""
+        <div class="header-banner">
+            <div class="user-name">재선님, 반가워요 👋</div>
+            <div class="sub-greeting">오늘 우리 가족의 금융 상태는 어떤가요?</div>
+        </div>
+    """, unsafe_allow_html=True)
 
-    col1, col2, col3 = st.columns(3)
+    # 섹션 1: 주식 분석
+    with st.container():
+        if st.button("", key="btn_stock"): move_to('StockAnalysis')
+        st.markdown("""
+            <div class="toss-card">
+                <div class="icon-box">📈</div>
+                <div class="text-box">
+                    <div class="title-text">주식 분석 대시보드</div>
+                    <div class="desc-text">전문가용 퀀트 지표를 알기 쉽게 보여드려요</div>
+                </div>
+                <div class="arrow-icon">❯</div>
+            </div>
+        """, unsafe_allow_html=True)
 
-    with col1:
-        st.markdown("""<div class="main-card">
-            <div class="card-icon">📈</div>
-            <div class="card-title">Stock Dashboard</div>
-            <div class="card-desc">증시와 지표를<br>한눈에 분석합니다.</div>
-        </div>""", unsafe_allow_html=True)
-        if st.button("들어가기", key="go_stock"): move_to('StockAnalysis')
+    # 섹션 2: 가상 포트폴리오
+    with st.container():
+        if st.button("", key="btn_portfolio"): move_to('Portfolio')
+        st.markdown("""
+            <div class="toss-card">
+                <div class="icon-box">💰</div>
+                <div class="text-box">
+                    <div class="title-text">가족 가상 포트폴리오</div>
+                    <div class="desc-text">우리 가족의 투자 성적표를 확인해 보세요</div>
+                </div>
+                <div class="arrow-icon">❯</div>
+            </div>
+        """, unsafe_allow_html=True)
 
-    with col2:
-        st.markdown("""<div class="main-card">
-            <div class="card-icon">💰</div>
-            <div class="card-title">Portfolio </div>
-            <div class="card-desc">우리 가족 가상 수익률과<br>자산 현황을 관리합니다.</div>
-        </div>""", unsafe_allow_html=True)
-        if st.button("준비 중", key="go_port", disabled=True): pass # disabled=True로 나중에 구현 예정 표시
+    # 섹션 3: 퀀트 교실
+    with st.container():
+        if st.button("", key="btn_edu"): move_to('Education')
+        st.markdown("""
+            <div class="toss-card">
+                <div class="icon-box">🏫</div>
+                <div class="text-box">
+                    <div class="title-text">쉬운 퀀트 투자 교실</div>
+                    <div class="desc-text">투자가 어려운 가족들을 위한 기초 가이드</div>
+                </div>
+                <div class="arrow-icon">❯</div>
+            </div>
+        """, unsafe_allow_html=True)
 
-    with col3:
-        st.markdown("""<div class="main-card">
-            <div class="card-icon">🧑‍🏫</div>
-            <div class="card-title">개인 일상</div>
-            <div class="card-desc">일상 이야기를 공유합니다.</div>
-        </div>""", unsafe_allow_html=True)
-        if st.button("준비 중", key="go_edu", disabled=True): pass
-
-# B. 주식 분석 대시보드 페이지 (기존 코드)
+# --- 4. 주식 분석 페이지 (간략화된 뼈대) ---
 def show_stock_analysis():
-    # 상단에 '홈으로' 버튼 추가
-    col_back, _ = st.columns([1, 10])
-    with col_back:
-        if st.button("🔙 홈으로", key="back_home"): move_to('Home')
-
-    # 사이드바 설정 (이 페이지에서만 보이게)
-    st.sidebar.header("📈 주식 분석 설정")
-    ticker_input = st.sidebar.text_input("종목 검색 (예: 005930.KS)", value="005930.KS")
-    days = st.sidebar.slider("분석 기간", 30, 730, 365)
-    run_button = st.sidebar.button("🚀 분석 시작")
-
-    # --- 기존 주식 분석 로직 (복사해서 붙여넣기) ---
-    # [!] 안정화된 1단계 코드를 여기에 모두 집어넣으시면 됩니다.
-    # (코드가 너무 길어져서 핵심 예시만 남기고 생략합니다. 실제로는 이전 단계 최종 코드를 넣어야 합니다.)
+    # 상단 네비게이션바 (토스 스타일)
+    nav_col, _ = st.columns([1, 8])
+    with nav_col:
+        if st.button("❮ 뒤로", key="back_home"): move_to('Home')
     
-    # 예시 데이터 (실제 코드를 넣어주세요)
-    st.title(f"{ticker_input} 분석 대시보드")
-    st.info("여기에 기존의 퀀트 카드, 차트, 뉴스 코드가 들어갑니다.")
-    # ... [기존 1단계 코드를 여기에 복사]
+    st.title("📈 주식 분석")
+    st.write("전문가님의 퀀트 로직이 들어갈 공간입니다.")
+    # 여기에 이전 단계에서 만든 상세 분석 코드를 함수로 호출하면 됩니다.
 
-# --- 4. 메인 컨트롤러 (Navigation 실행) ---
-# 세션 상태에 따라 어떤 페이지 함수를 실행할지 결정합니다.
+# --- 5. 페이지 렌더링 컨트롤러 ---
 if st.session_state['current_page'] == 'Home':
     show_home()
 elif st.session_state['current_page'] == 'StockAnalysis':
     show_stock_analysis()
+else:
+    st.write("준비 중인 페이지입니다.")
+    if st.button("홈으로 돌아가기"): move_to('Home')
