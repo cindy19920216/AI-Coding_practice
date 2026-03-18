@@ -3,9 +3,9 @@ import requests
 from datetime import datetime
 
 # 읽기용 URL
-READ_URL = "https://docs.google.com/spreadsheets/d/1zTU8HRcaA79bSDgqOA7yYlkXXbC3OcJaBz9x511C1PQ/gviz/tq?tqx=out:csv"
+READ_URL = "https://docs.google.com/spreadsheets/d/AKfycby0Rbs5eL_gxbBuNMZiaOk3Y2jG8QXwIqNbpCEKcPLSr2sC8hW-rt7tpYMFjXPqpxV5/gviz/tq?tqx=out:csv"
 # 쓰기용 Apps Script URL (전문가님이 만드신 주소)
-API_URL = "https://script.google.com/macros/s/AKfycbxyrGGYC9Ik-eBunTjyaSyvT5TK40G0XceCU-0oNKw/exec" 
+API_URL = "https://script.google.com/macros/s/AKfycby0Rbs5eL_gxbBuNMZiaOk3Y2jG8QXwIqNbpCEKcPLSr2sC8hW-rt7tpYMFjXPqpxV5/exec" 
 
 def load_data():
     try:
