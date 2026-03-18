@@ -1,52 +1,49 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
-from datetime import datetime, timedelta
-from streamlit_gsheets import GSheetsConnection
-import feedparser
-import urllib.parse
 
-# --- 1. 전용 디자인 (토스 & 모바일 최적화 CSS) ---
+# --- 1. 디자인 및 스타일 (클릭 영역 최적화) ---
 st.set_page_config(page_title="우리 가족 스마트 금융", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;700&display=swap');
     html, body, [class*="css"] { font-family: 'Pretendard', sans-serif; background-color: #F2F4F6; }
-    .main .block-container { max-width: 800px; padding-top: 2rem; }
+    .main .block-container { max-width: 600px; padding-top: 2rem; }
 
-    /* 프로필 및 일상 공유 카드 스타일 */
+    /* 프로필 카드 */
     .profile-card {
-        background-color: white; border-radius: 20px; padding: 20px;
-        text-align: center; transition: all 0.2s; border: 1px solid #e5e8eb;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+        background-color: white; border-radius: 20px; padding: 15px;
+        text-align: center; border: 1px solid #e5e8eb; height: 120px;
     }
-    .profile-emoji { font-size: 40px; margin-bottom: 10px; }
-    .profile-name { font-size: 16px; font-weight: 700; color: #191f28; }
-    
-    .sns-tab {
-        background-color: white; border-radius: 20px; padding: 20px; 
-        display: flex; align-items: center; border: 1px solid #e5e8eb;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.03); margin-top: 20px;
+    .profile-emoji { font-size: 30px; }
+    .profile-name { font-size: 14px; font-weight: 700; color: #191f28; margin-top:5px; }
+
+    /* 말풍선 스타일 */
+    .bubble-box {
+        background-color: #3182f6; color: white; border-radius: 15px;
+        padding: 15px; margin-top: 20px; position: relative; font-weight: bold;
+    }
+    .bubble-box::after {
+        content: ''; position: absolute; bottom: 100%; left: 50%;
+        border-width: 10px; border-style: solid;
+        border-color: transparent transparent #3182f6 transparent;
+        transform: translateX(-50%);
     }
 
-    /* 토스형 메인 메뉴 카드 */
-    .toss-card {
-        background-color: white; border-radius: 24px; padding: 24px; margin-bottom: 16px;
-        display: flex; align-items: center; transition: all 0.2s; border: none;
+    /* 탭 클릭 버튼 스타일 (Streamlit 버튼을 카드처럼 보이게) */
+    .stButton>button {
+        border-radius: 20px; border: 1px solid #e5e8eb; background-color: white;
+        padding: 20px; width: 100%; text-align: left; height: auto;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.03);
     }
-    .icon-box { width: 50px; height: 50px; background-color: #F9FAFB; border-radius: 14px; 
-                display: flex; justify-content: center; align-items: center; font-size: 24px; margin-right: 15px; }
-    
-    /* 버튼 투명화 로직 */
-    .stButton>button { background: transparent; border: none; padding: 0; width: 100%; height: auto; color: inherit; }
-    .stButton>button:hover { background: transparent; border: none; color: #3182f6; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. 데이터 및 세션 관리 ---
+# --- 2. 데이터 관리 (임시 저장소) ---
 if 'user_id' not in st.session_state: st.session_state['user_id'] = None
 if 'current_page' not in st.session_state: st.session_state['current_page'] = 'Home'
+if 'temp_messages' not in st.session_state: st.session_state['temp_messages'] = [] # 메시지 저장용 리스트
+if 'speaking_id' not in st.session_state: st.session_state['speaking_id'] = None # 현재 선택된 말풍선 주인
 
 family_members = [
     {"id": "chanhee", "name": "찬희", "role": "아빠", "emoji": "👨🏻‍💻"},
@@ -56,183 +53,82 @@ family_members = [
     {"id": "seunggyu", "name": "승규", "role": "막내", "emoji": "👦🏻"}
 ]
 
-# 구글 시트 연동 (전문가님: 시트 ID를 입력하세요)
-def load_watchlist(user_id):
-    try:
-        sheet_url = "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID_HERE/edit#gid=0"
-        conn = st.connection("gsheets", type=GSheetsConnection)
-        df = conn.read(spreadsheet=sheet_url)
-        return df[df['user_id'] == user_id]['ticker'].tolist()
-    except: return []
+# --- 3. 화면 구현 ---
 
-# --- 3. 화면별 함수 정의 ---
-
-# [화면 1] 로그인/프로필 선택 + 일상 공유 탭
+# [화면 1] 프로필 선택 + 일상 공유 탭
 def show_login_screen():
-    st.markdown("<h1 style='text-align: center; color: #191f28; margin-top: 30px;'>누가 오셨나요?</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #8b95a1; margin-bottom: 40px;'>가족 금융 매니저에 오신 것을 환영합니다</p>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center;'>누가 오셨나요?</h2><br>", unsafe_allow_html=True)
     
-    # 가족 프로필 (5인)
+    # 5인 프로필 행 나열
     cols = st.columns(5)
     for i, m in enumerate(family_members):
         with cols[i]:
-            if st.button("", key=f"sel_{m['id']}"):
+            if st.button(f"{m['emoji']}\n{m['name']}", key=f"login_{m['id']}"):
                 st.session_state['user_id'] = m['id']
                 st.rerun()
-            st.markdown(f"""
-                <div class="profile-card">
-                    <div class="profile-emoji">{m['emoji']}</div>
-                    <div class="profile-name">{m['name']}</div>
-                    <div style="font-size:12px; color:#8b95a1;">{m['role']}</div>
-                </div>
-            """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # [일상 공유하기] 탭 (프로필 하단 배치)
-    if st.button("", key="go_sns_tab"):
+    # 일상 공유하기 탭 (디자인 입힌 버튼으로 교체)
+    st.markdown("### ✨ 가족 소식")
+    if st.button("📸 일상 공유하기  ❯", key="btn_go_sns"):
         st.session_state['current_page'] = 'FamilySNS'
         st.rerun()
-    st.markdown("""
-        <div class="sns-tab">
-            <div style="font-size: 24px; margin-right: 15px;">📸</div>
-            <div style="text-align: left; flex-grow:1;">
-                <div style="font-size: 16px; font-weight: 700; color: #191f28;">일상 공유하기</div>
-                <div style="font-size: 13px; color: #8b95a1;">오늘 가족들에게 하고 싶은 말이 있나요?</div>
-            </div>
-            <div style="color: #B0B8C1;">❯</div>
-        </div>
-    """, unsafe_allow_html=True)
 
-# [화면 2] 홈화면 (로그인 후)
-def show_home():
-    user = next(m for m in family_members if m['id'] == st.session_state['user_id'])
-    
-    # 상단 바
-    col_h, col_l = st.columns([8, 2])
-    with col_h: st.markdown(f"<h1>{user['name']}님, 반가워요 👋</h1>", unsafe_allow_html=True)
-    with col_l: 
-        if st.button("가족 바꾸기"): 
-            st.session_state['user_id'] = None
-            st.rerun()
-
-    # 관심 종목 리스트 (구글 시트 연동)
-    st.markdown("<h3 style='font-size:18px; margin-top:20px;'>내가 찜한 주식</h3>", unsafe_allow_html=True)
-    watchlist = load_watchlist(user['id'])
-    if watchlist:
-        for tk in watchlist:
-            st.markdown(f'<div style="background:white; padding:15px; border-radius:15px; margin-bottom:8px; border:1px solid #e5e8eb;"><b>{tk}</b> <span style="float:right; color:#3182f6;">상세보기 ❯</span></div>', unsafe_allow_html=True)
-    else:
-        st.info("구글 시트에 종목을 등록해 주세요.")
-
-    # 메인 메뉴
-    if st.button("", key="go_stock_page"): st.session_state['current_page'] = 'Stock'; st.rerun()
-    st.markdown('<div class="toss-card"><div class="icon-box">📈</div><div><div style="font-weight:700;">주식 분석 대시보드</div><div style="color:#8b95a1; font-size:13px;">전문가용 퀀트 분석</div></div></div>', unsafe_allow_html=True)
-
-# [화면 3] 일상 공유 페이지
+# [화면 2] 일상 공유 상세 페이지
 def show_sns_page():
-    if st.button("❮ 홈으로", key="back_from_sns"):
+    if st.button("❮ 홈으로 돌아가기"):
         st.session_state['current_page'] = 'Home'
         st.rerun()
-    st.title("📸 가족 일상 공유")
-    st.write("가족들과 오늘 하루를 공유해 보세요!")
-    # 여기에 추후 메시지 입력/출력 기능 추가 예정
 
-# --- 4. 메인 컨트롤러 ---
-if st.session_state['user_id'] is None:
-    show_login_screen()
-else:
-    if st.session_state['current_page'] == 'Home':
-        show_home()
-    elif st.session_state['current_page'] == 'FamilySNS':
-        show_sns_page()
-    elif st.session_state['current_page'] == 'Stock':
-        # 이전 단계의 주식 분석 상세 코드를 여기에 연결
-        if st.button("❮ 뒤로가기"): st.session_state['current_page'] = 'Home'; st.rerun()
-        st.write("상세 분석 페이지입니다.")
-# --- 일상 공유 페이지 상세 구현 ---
+    st.title("📸 우리 가족 게시판")
+    st.write("이모티콘을 선택하고 메시지를 입력하세요.")
 
-def show_sns_page():
-    # 상단 헤더 및 뒤로가기
-    col_back, col_title = st.columns([1, 5])
-    with col_back:
-        if st.button("❮ 홈", key="back_home_sns"):
-            st.session_state['current_page'] = 'Home'
-            st.rerun()
-    with col_title:
-        st.markdown("<h2 style='margin-top:-5px;'>📸 우리 가족 게시판</h2>", unsafe_allow_html=True)
-
-    st.markdown("<p style='color:#8b95a1; margin-bottom:30px;'>이모티콘을 눌러 오늘의 한마디를 남겨보세요!</p>", unsafe_allow_html=True)
-
-    # 1. 5명의 이모티콘 행 나열 (CSS로 간격 조정)
-    st.markdown("""
-        <style>
-        .sns-profile-row { display: flex; justify-content: space-around; margin-bottom: 30px; background: white; padding: 15px; border-radius: 20px; border: 1px solid #e5e8eb; }
-        .sns-emoji-btn { font-size: 35px; cursor: pointer; transition: transform 0.2s; padding: 10px; border-radius: 50%; }
-        .sns-emoji-btn:hover { transform: scale(1.2); background-color: #f2f4f6; }
-        .selected-emoji { background-color: #EBF4FF; border: 2px solid #3182f6; }
-        
-        /* 말풍선 스타일 */
-        .bubble {
-            position: relative; background: #3182f6; border-radius: .4em; color: white;
-            padding: 15px; margin-top: 20px; font-weight: 500;
-        }
-        .bubble:after {
-            content: ''; position: absolute; top: 0; left: 50%; width: 0; height: 0;
-            border: 15px solid transparent; border-bottom-color: #3182f6;
-            border-top: 0; margin-left: -15px; margin-top: -15px;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
-    # 세션 상태에 '누구의 말풍선을 열었는지' 저장
-    if 'speaking_user' not in st.session_state:
-        st.session_state['speaking_user'] = None
-
-    # 이모티콘 행 레이아웃
+    # 1. 5명 이모티콘 나열
     cols = st.columns(5)
     for i, m in enumerate(family_members):
         with cols[i]:
-            # 선택된 상태면 배경색 강조
-            is_selected = st.session_state['speaking_user'] == m['id']
-            if st.button(m['emoji'], key=f"sns_icon_{m['id']}", help=f"{m['name']}의 한마디"):
-                st.session_state['speaking_user'] = m['id']
+            if st.button(m['emoji'], key=f"emoji_{m['id']}"):
+                st.session_state['speaking_id'] = m['id']
                 st.rerun()
-            st.markdown(f"<p style='text-align:center; font-size:12px; font-weight:bold;'>{m['name']}</p>", unsafe_allow_html=True)
+            st.caption(f"<p style='text-align:center;'>{m['name']}</p>", unsafe_allow_html=True)
 
-    # 3. 말풍선 및 타이핑 영역
-    if st.session_state['speaking_user']:
-        speaker = next(m for m in family_members if m['id'] == st.session_state['speaking_user'])
+    # 2. 말풍선 및 실시간 타이핑 영역
+    if st.session_state['speaking_id']:
+        speaker = next(m for m in family_members if m['id'] == st.session_state['speaking_id'])
         
-        st.markdown(f"""
-            <div class="bubble">
-                {speaker['name']} SAYS...
-            </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"""<div class="bubble-box">{speaker['name']} SAYS...</div>""", unsafe_allow_html=True)
         
-        # 실제 입력을 위한 텍스트 상자
-        with st.container():
-            st.write("") # 간격 조절
-            new_msg = st.text_input(
-                label=f"{speaker['name']}님의 메시지 입력", 
-                placeholder=f"오늘 {speaker['name']}님은 어떤 기분인가요?",
-                label_visibility="collapsed"
-            )
+        # 폼(Form)을 사용하여 엔터키로 전송 가능하게 설정
+        with st.form(key="msg_form", clear_on_submit=True):
+            user_msg = st.text_input(label="메시지 입력", placeholder="여기에 타이핑하세요...", label_visibility="collapsed")
+            submit = st.form_submit_button("전송하기")
             
-            col_send, _ = st.columns([1, 3])
-            with col_send:
-                if st.button("전송하기", key="send_msg"):
-                    if new_msg:
-                        # [!] 여기에 구글 시트에 메시지를 저장하는 코드를 넣으면 완벽합니다.
-                        st.success(f"'{new_msg}' 메시지가 공유되었습니다!")
-                        st.session_state['speaking_user'] = None # 입력 후 닫기
-                        st.rerun()
-                    else:
-                        st.warning("내용을 입력해주세요.")
+            if submit and user_msg:
+                # 리스트에 저장 (시간, 이름, 메시지)
+                timestamp = datetime.now().strftime("%H:%M")
+                st.session_state['temp_messages'].insert(0, f"[{timestamp}] {speaker['name']}: {user_msg}")
+                st.session_state['speaking_id'] = None # 입력 후 닫기
+                st.rerun()
 
-    # 하단: 가족들의 최근 메시지 피드 (예시)
-    st.markdown("<hr style='border: 0.5px solid #e5e8eb; margin: 40px 0;'>", unsafe_allow_html=True)
-    st.markdown("### 💬 최근 우리 가족 이야기")
-    # 구글 시트에서 가져온 메시지들을 나열하는 공간
-    st.write("👨‍💻 아빠: 오늘 주식 분석 완료! 다들 확인해봐~ (1시간 전)")
-    st.write("👩‍🎨 재선: 오늘 그린 그림이에요! 🎨 (3시간 전)") 
+    # 3. 실시간 피드 출력
+    st.markdown("---")
+    st.subheader("💬 실시간 가족 피드")
+    if st.session_state['temp_messages']:
+        for m in st.session_state['temp_messages'][:10]: # 최근 10개만
+            st.write(m)
+    else:
+        st.caption("아직 올라온 소식이 없어요.")
+
+# --- 4. 메인 컨트롤러 ---
+if st.session_state['user_id'] is None and st.session_state['current_page'] == 'Home':
+    show_login_screen()
+elif st.session_state['current_page'] == 'FamilySNS':
+    show_sns_page()
+else:
+    # 홈화면 (로그인 후)
+    user = next(m for m in family_members if m['id'] == st.session_state['user_id'])
+    st.title(f"{user['name']}님, 안녕하세요!")
+    if st.button("로그아웃"): 
+        st.session_state['user_id'] = None
+        st.rerun()
