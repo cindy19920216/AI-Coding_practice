@@ -2,30 +2,40 @@ import pandas as pd
 import requests
 from datetime import datetime
 
-# 읽기용 URL
-READ_URL = "https://docs.google.com/spreadsheets/d/AKfycby0Rbs5eL_gxbBuNMZiaOk3Y2jG8QXwIqNbpCEKcPLSr2sC8hW-rt7tpYMFjXPqpxV5/gviz/tq?tqx=out:csv"
-# 쓰기용 Apps Script URL (전문가님이 만드신 주소)
-API_URL = "https://script.google.com/macros/s/AKfycby0Rbs5eL_gxbBuNMZiaOk3Y2jG8QXwIqNbpCEKcPLSr2sC8hW-rt7tpYMFjXPqpxV5/exec" 
+# [수정됨] 읽기용 URL: 시트의 실제 ID를 사용해야 합니다.
+# 전문가님의 시트 ID: 1zTU8HRcaA79bSDgqOA7yYlkXXbC3OcJaBz9x511C1PQ
+SHEET_ID = "1zTU8HRcaA79bSDgqOA7yYlkXXbC3OcJaBz9x511C1PQ"
+READ_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv"
+
+# [유지] 쓰기용 Apps Script URL (이건 그대로 쓰시면 됩니다)
+API_URL = "https://script.google.com/macros/s/AKfycby0Rbs5eL_gxbBuNMZiaOk3Y2jG8QXwIqNbpCEKcPLSr2sC8hW-rt7tpYMFjXPqpxV5/exec"
 
 def load_data():
     try:
-        return pd.read_csv(READ_URL)
-    except:
+        # 시트에서 데이터 읽기
+        df = pd.read_csv(READ_URL)
+        return df
+    except Exception as e:
+        # 에러가 날 경우 빈 데이터프레임 반환
         return pd.DataFrame(columns=["name", "emoji", "msg", "time"])
 
 def save_data(name, emoji, msg):
     payload = {
-        "name": name, "emoji": emoji, "msg": msg,
+        "name": name, 
+        "emoji": emoji, 
+        "msg": msg,
         "time": datetime.now().strftime("%Y-%m-%d %H:%M")
     }
     try:
-        requests.post(API_URL, json=payload)
-        return True
+        # Apps Script로 전송
+        response = requests.post(API_URL, json=payload)
+        # 성공적으로 보냈는지 확인 (200번대가 성공)
+        return response.status_code == 200
     except:
         return False
-# database.py에 추가
+
+# 시장 지표 데이터 (아이콘 클릭 시 띠 노출용)
 def get_market_indices():
-    # 2026-03-18 현재 예시 데이터 (실제 서비스 시 API 연동 권장)
     return {
         "KOSPI": "5,801.61 (▲2.86%)",
         "KOSDAQ": "1,155.27 (▲1.61%)",
