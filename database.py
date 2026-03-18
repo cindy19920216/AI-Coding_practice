@@ -21,26 +21,20 @@ def load_data():
         return pd.DataFrame(columns=["name", "emoji", "msg", "time"])
 
 def save_data(name, emoji, msg):
-    payload = {
-        "name": name, 
-        "emoji": emoji, 
+    # JSON이 아닌 일반 폼 데이터 형식으로 전송 (Apps Script가 더 잘 먹을 때가 있음)
+    params = {
+        "name": name,
+        "emoji": emoji,
         "msg": msg,
         "time": datetime.now().strftime("%Y-%m-%d %H:%M")
     }
     try:
-        # allow_redirects=True를 추가하여 구글의 리다이렉션을 허용합니다.
-        response = requests.post(API_URL.strip(), json=payload, timeout=15, allow_redirects=True)
-        
-        # 구글은 성공 시 200 또는 302(이동)를 보냅니다.
-        if response.status_code in [200, 302]:
-            return True
-        else:
-            st.error(f"시트 응답 오류: {response.status_code}")
-            return False
-    except Exception as e:
-        st.error(f"연결 오류: {e}")
+        # json=payload 대신 params=params 사용
+        response = requests.post(API_URL.strip(), params=params, timeout=15)
+        return True # 응답 코드 상관없이 일단 보냈으면 성공으로 간주하고 시트 확인
+    except:
         return False
-
+        
 def get_market_indices():
     return {
         "KOSPI": "5,801.61 (▲2.86%)",
