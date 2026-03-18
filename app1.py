@@ -55,11 +55,15 @@ def show_sns_page():
         if st.session_state['speaking_id'] == m['id']:
             with st.form(key=f"form_{m['id']}", clear_on_submit=True):
                 msg = st.text_input("소식을 남겨주세요", label_visibility="collapsed")
-                if st.form_submit_button("가족과 공유"):
-                    if msg and save_data(m['name'], m['emoji'], msg):
-                        st.session_state['speaking_id'] = None
-                        st.rerun()
-    
+                # app.py의 저장 버튼 로직 부분
+       if st.button("가족과 공유"):
+       if save_data(st.session_state.user_name, st.session_state.user_emoji, msg_input):
+        st.success("메시지가 공유되었습니다!")
+        # 저장 성공 후 앱을 즉시 새로고침해서 시트 데이터를 다시 읽어오게 합니다.
+        st.rerun() 
+    else:
+        st.error("저장에 실패했습니다.")
+        
     st.markdown("---")
     st.subheader("💬 실시간 가족 피드")
     df = load_data()
