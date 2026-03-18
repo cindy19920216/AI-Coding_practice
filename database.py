@@ -10,7 +10,7 @@ READ_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:c
 
 # 2. 쓰기용 API URL (전문가님이 새로 주신 배포 ID 적용)
 # 끝에 /exec가 붙어있는지 꼭 확인해주세요!
-DEPLOY_ID = "AKfycbw5q0EIadyoQYYkgmLwJL24nCeYzFWlAQrbg_CfUXBcGkUiBRJ1xOfEAEcIEcz5-ev_"
+DEPLOY_ID = "AKfycbxBbWU9mOYT9wSANR1zIU3fNMLnwaNf8pGJkAEYX-G6AgUYkHyTUiV_a9eZxOgN2Xxp"
 API_URL = f"https://script.google.com/macros/s/{DEPLOY_ID}/exec"
 
 def load_data():
