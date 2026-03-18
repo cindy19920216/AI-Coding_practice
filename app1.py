@@ -150,3 +150,89 @@ else:
         # 이전 단계의 주식 분석 상세 코드를 여기에 연결
         if st.button("❮ 뒤로가기"): st.session_state['current_page'] = 'Home'; st.rerun()
         st.write("상세 분석 페이지입니다.")
+# --- 일상 공유 페이지 상세 구현 ---
+
+def show_sns_page():
+    # 상단 헤더 및 뒤로가기
+    col_back, col_title = st.columns([1, 5])
+    with col_back:
+        if st.button("❮ 홈", key="back_home_sns"):
+            st.session_state['current_page'] = 'Home'
+            st.rerun()
+    with col_title:
+        st.markdown("<h2 style='margin-top:-5px;'>📸 우리 가족 게시판</h2>", unsafe_allow_html=True)
+
+    st.markdown("<p style='color:#8b95a1; margin-bottom:30px;'>이모티콘을 눌러 오늘의 한마디를 남겨보세요!</p>", unsafe_allow_html=True)
+
+    # 1. 5명의 이모티콘 행 나열 (CSS로 간격 조정)
+    st.markdown("""
+        <style>
+        .sns-profile-row { display: flex; justify-content: space-around; margin-bottom: 30px; background: white; padding: 15px; border-radius: 20px; border: 1px solid #e5e8eb; }
+        .sns-emoji-btn { font-size: 35px; cursor: pointer; transition: transform 0.2s; padding: 10px; border-radius: 50%; }
+        .sns-emoji-btn:hover { transform: scale(1.2); background-color: #f2f4f6; }
+        .selected-emoji { background-color: #EBF4FF; border: 2px solid #3182f6; }
+        
+        /* 말풍선 스타일 */
+        .bubble {
+            position: relative; background: #3182f6; border-radius: .4em; color: white;
+            padding: 15px; margin-top: 20px; font-weight: 500;
+        }
+        .bubble:after {
+            content: ''; position: absolute; top: 0; left: 50%; width: 0; height: 0;
+            border: 15px solid transparent; border-bottom-color: #3182f6;
+            border-top: 0; margin-left: -15px; margin-top: -15px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # 세션 상태에 '누구의 말풍선을 열었는지' 저장
+    if 'speaking_user' not in st.session_state:
+        st.session_state['speaking_user'] = None
+
+    # 이모티콘 행 레이아웃
+    cols = st.columns(5)
+    for i, m in enumerate(family_members):
+        with cols[i]:
+            # 선택된 상태면 배경색 강조
+            is_selected = st.session_state['speaking_user'] == m['id']
+            if st.button(m['emoji'], key=f"sns_icon_{m['id']}", help=f"{m['name']}의 한마디"):
+                st.session_state['speaking_user'] = m['id']
+                st.rerun()
+            st.markdown(f"<p style='text-align:center; font-size:12px; font-weight:bold;'>{m['name']}</p>", unsafe_allow_html=True)
+
+    # 3. 말풍선 및 타이핑 영역
+    if st.session_state['speaking_user']:
+        speaker = next(m for m in family_members if m['id'] == st.session_state['speaking_user'])
+        
+        st.markdown(f"""
+            <div class="bubble">
+                {speaker['name']} SAYS...
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # 실제 입력을 위한 텍스트 상자
+        with st.container():
+            st.write("") # 간격 조절
+            new_msg = st.text_input(
+                label=f"{speaker['name']}님의 메시지 입력", 
+                placeholder=f"오늘 {speaker['name']}님은 어떤 기분인가요?",
+                label_visibility="collapsed"
+            )
+            
+            col_send, _ = st.columns([1, 3])
+            with col_send:
+                if st.button("전송하기", key="send_msg"):
+                    if new_msg:
+                        # [!] 여기에 구글 시트에 메시지를 저장하는 코드를 넣으면 완벽합니다.
+                        st.success(f"'{new_msg}' 메시지가 공유되었습니다!")
+                        st.session_state['speaking_user'] = None # 입력 후 닫기
+                        st.rerun()
+                    else:
+                        st.warning("내용을 입력해주세요.")
+
+    # 하단: 가족들의 최근 메시지 피드 (예시)
+    st.markdown("<hr style='border: 0.5px solid #e5e8eb; margin: 40px 0;'>", unsafe_allow_html=True)
+    st.markdown("### 💬 최근 우리 가족 이야기")
+    # 구글 시트에서 가져온 메시지들을 나열하는 공간
+    st.write("👨‍💻 아빠: 오늘 주식 분석 완료! 다들 확인해봐~ (1시간 전)")
+    st.write("👩‍🎨 재선: 오늘 그린 그림이에요! 🎨 (3시간 전)") 
