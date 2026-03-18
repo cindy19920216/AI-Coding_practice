@@ -67,11 +67,11 @@ user_id = query_params.get("user", "chanhee") # 기본값은 아빠(찬희님)
 user_map = {
     "chanhee": "찬희",   # 아빠
     "jiwoo": "지우",     # 엄마
-    "jaeseon": "재선",   # 큰딸
+    "jaesun": "재선",   # 큰딸
     "gyubi": "규비",     # 작은딸
     "seunggyu": "승규"   # 막내
 }
-display_name = user_map.get(user_id, "찬희") # 등록되지 않은 ID면 기본값 '찬희'
+display_name = user_map.get(user_id, "버핏") # 등록되지 않은 ID면 기본값 '찬희'
 
 # --- 3. 페이지 내비게이션 ---
 if 'current_page' not in st.session_state:
