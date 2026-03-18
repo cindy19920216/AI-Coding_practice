@@ -87,4 +87,25 @@ def show_login_screen():
         with cols[i]:
             if st.button(f"{m['emoji']}\n{m['name']}", key=f"sel_{m['id']}"):
                 st.session_state['user_id'] = m['id']
-                st.rerun
+                st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # 하단 일상 공유하기 배너
+    sns_label = "📸   일상 공유하기\n우리 가족 소식 보러가기       ❯"
+    if st.button(sns_label, key="go_sns_tab"):
+        st.session_state['current_page'] = 'FamilySNS'
+        st.rerun()
+
+# --- 4. 컨트롤러 ---
+if st.session_state['user_id'] is None and st.session_state['current_page'] == 'Home':
+    show_login_screen()
+elif st.session_state['current_page'] == 'FamilySNS':
+    if st.button("❮ 홈으로 돌아가기", key="back_home"):
+        st.session_state['current_page'] = 'Home'; st.rerun()
+    st.markdown("<h1 style='color:white;'>📸 가족 게시판</h1>", unsafe_allow_html=True)
+else:
+    user = next(m for m in family_members if m['id'] == st.session_state['user_id'])
+    st.markdown(f"<h1 style='color:white; text-align:center;'>{user['emoji']} {user['name']}님 반가워요!</h1>", unsafe_allow_html=True)
+    if st.button("❮ 가족 바꾸기", key="logout"):
+        st.session_state['user_id'] = None; st.rerun()
