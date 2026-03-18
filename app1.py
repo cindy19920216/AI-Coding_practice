@@ -130,26 +130,60 @@ def show_home():
     st.markdown('<div class="toss-card"><div class="icon-box">📈</div><div><div style="font-weight:700;">주식 분석 대시보드</div><div style="color:#8b95a1; font-size:13px;">전문가용 퀀트 분석</div></div></div>', unsafe_allow_html=True)
 
 # [화면 3] 일상 공유 페이지
-def show_sns_page():
-    if st.button("❮ 홈으로", key="back_from_sns"):
-        st.session_state['current_page'] = 'Home'
-        st.rerun()
-    st.title("📸 가족 일상 공유")
-    st.write("가족들과 오늘 하루를 공유해 보세요!")
-    # 여기에 추후 메시지 입력/출력 기능 추가 예정
-if st.button("", key="go_sns_fixed"):
+# 탭 클릭 버튼 (디자인 위에 투명하게 겹침)
+    if st.button("", key="go_sns_fixed"):
         st.session_state['current_page'] = 'FamilySNS'
         st.rerun()
 
+# [화면 2] 일상 공유 상세 페이지 (말풍선 타이핑)
+def show_sns_page():
+    if st.button("❮ 홈으로", key="back_home"):
+        st.session_state['current_page'] = 'Home'; st.session_state['speaking_id'] = None; st.rerun()
+    
+    st.title("📸 가족 게시판")
+    st.write("말풍선을 클릭하여 메시지를 남겨보세요.")
+
+    # 2) 5명 이름을 행으로 나열 + 3) 옆에 말풍선 버튼
+    for m in family_members:
+        with st.container():
+            col_name, col_bubble = st.columns([1, 4])
+            with col_name:
+                st.markdown(f"<div style='margin-top:10px; font-weight:700;'>{m['emoji']} {m['name']}</div>", unsafe_allow_html=True)
+            with col_bubble:
+                # 4) 말풍선 클릭 시 타이핑 영역 활성화
+                if st.button(f"이야기 듣고 싶어요! 💬", key=f"bubble_{m['id']}", help=f"{m['name']} SAYS..."):
+                    st.session_state['speaking_id'] = m['id']
+                    st.rerun()
+
+        # 클릭한 사람 아래에만 타이핑 란 노출
+        if st.session_state['speaking_id'] == m['id']:
+            st.markdown(f'<div class="active-bubble">{m["name"]} SAYS...</div>', unsafe_allow_html=True)
+            with st.form(key=f"form_{m['id']}", clear_on_submit=True):
+                msg = st.text_input("메시지 입력", placeholder="오늘 어떤 일이 있었나요?", label_visibility="collapsed")
+                if st.form_submit_button("가족과 공유"):
+                    if msg:
+                        time_now = datetime.now().strftime("%H:%M")
+                        st.session_state['family_feed'].insert(0, f"[{time_now}] {m['emoji']} {m['name']}: {msg}")
+                        st.session_state['speaking_id'] = None
+                        st.rerun()
+
+    # 실시간 피드
+    st.markdown("---")
+    st.subheader("💬 실시간 가족 피드")
+    if st.session_state['family_feed']:
+        for post in st.session_state['family_feed'][:10]:
+            st.write(post)
+    else:
+        st.caption("아직 올라온 이야기가 없어요.")
+
 # --- 4. 메인 컨트롤러 ---
-if st.session_state['user_id'] is None:
+if st.session_state['user_id'] is None and st.session_state['current_page'] == 'Home':
     show_login_screen()
+elif st.session_state['current_page'] == 'FamilySNS':
+    show_sns_page()
 else:
-    if st.session_state['current_page'] == 'Home':
-        show_home()
-    elif st.session_state['current_page'] == 'FamilySNS':
-        show_sns_page()
-    elif st.session_state['current_page'] == 'Stock':
-        # 이전 단계의 주식 분석 상세 코드를 여기에 연결
-        if st.button("❮ 뒤로가기"): st.session_state['current_page'] = 'Home'; st.rerun()
-        st.write("상세 분석 페이지입니다.")
+    # 로그인 후 홈화면 (나중에 주식 대시보드 연결)
+    user = next(m for m in family_members if m['id'] == st.session_state['user_id'])
+    st.header(f"{user['name']}님 반가워요!")
+    if st.button("❮ 가족 바꾸기"): 
+        st.session_state['user_id'] = None; st.rerun()
