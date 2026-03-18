@@ -3,13 +3,15 @@ import requests
 from datetime import datetime
 import streamlit as st
 
-# 1. 읽기용 URL (시트 ID가 포함된 주소)
-# 전문가님의 시트 ID: 1zTU8HRcaA79bSDgqOA7yYlkXXbC3OcJaBz9x511C1PQ
-READ_URL = "https://docs.google.com/spreadsheets/d/AKfycbydzgeiB1izZx3AX9RN8yOtiPzi2bWe3SI_f76LEA0G6Qo6BgJNwAJ-HI1vTADCYw2t/gviz/tq?tqx=out:csv"
+# 1. 읽기용 URL (가족들이 쓴 글을 불러올 때 사용)
+# 전문가님의 시트 ID를 기반으로 한 CSV 출력 주소입니다.
+SHEET_ID = "1zTU8HRcaA79bSDgqOA7yYlkXXbC3OcJaBz9x511C1PQ"
+READ_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv"
 
-# 2. 쓰기용 API URL (끝에 공백이 없는지 확인 필수!)
-# 복사하실 때 따옴표 안에 빈칸이 생기지 않도록 주의해주세요.
-API_URL = "https://script.google.com/macros/s/AKfycbydzgeiB1izZx3AX9RN8yOtiPzi2bWe3SI_f76LEA0G6Qo6BgJNwAJ-HI1vTADCYw2t/exec"
+# 2. 쓰기용 API URL (전문가님이 새로 주신 배포 ID 적용)
+# 끝에 /exec가 붙어있는지 꼭 확인해주세요!
+DEPLOY_ID = "AKfycbw5q0EIadyoQYYkgmLwJL24nCeYzFWlAQrbg_CfUXBcGkUiBRJ1xOfEAEcIEcz5-ev_"
+API_URL = f"https://script.google.com/macros/s/{DEPLOY_ID}/exec"
 
 def load_data():
     try:
