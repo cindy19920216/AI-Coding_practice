@@ -23,11 +23,25 @@ st.markdown("""
     }
     .profile-emoji { font-size: 40px; margin-bottom: 10px; }
     .profile-name { font-size: 16px; font-weight: 700; color: #191f28; }
-    
-    .sns-tab {
-        background-color: white; border-radius: 20px; padding: 20px; 
-        display: flex; align-items: center; border: 1px solid #e5e8eb;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.03); margin-top: 20px;
+
+    /* 수정된 부분: 일상 공유하기 탭 버튼 전용 CSS (클릭 영역 100% 확보) */
+    div.stButton > button[key="go_sns_tab"] {
+        height: 100px !important;
+        padding: 0 !important;
+        border: 1px solid #e5e8eb !important;
+        background-color: white !important;
+        border-radius: 20px !important;
+        width: 100% !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.03) !important;
+        display: block !important;
+        transition: all 0.2s;
+    }
+    div.stButton > button[key="go_sns_tab"]:hover {
+        border-color: #3182f6 !important;
+        transform: translateY(-3px);
+    }
+    .sns-btn-layout {
+        display: flex; align-items: center; padding: 20px; text-align: left; width: 100%;
     }
 
     /* 토스형 메인 메뉴 카드 */
@@ -41,16 +55,16 @@ st.markdown("""
     /* 말풍선 강조 스타일 */
     .active-bubble {
         background-color: #3182f6; color: white; border-radius: 12px;
-        padding: 12px; margin-bottom: 10px; font-weight: 600;
+        padding: 12px; margin-bottom: 10px; font-weight: 600; text-align: center;
     }
 
-    /* 버튼 투명화 로직 */
+    /* 버튼 투명화 로직 (프로필 선택 등에 사용) */
     .stButton>button { background: transparent; border: none; padding: 0; width: 100%; height: auto; color: inherit; }
     .stButton>button:hover { background: transparent; border: none; color: #3182f6; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. 데이터 및 세션 초기화 (중요: 에러 방지) ---
+# --- 2. 데이터 및 세션 초기화 ---
 if 'user_id' not in st.session_state: st.session_state['user_id'] = None
 if 'current_page' not in st.session_state: st.session_state['current_page'] = 'Home'
 if 'family_feed' not in st.session_state: st.session_state['family_feed'] = []
@@ -64,7 +78,6 @@ family_members = [
     {"id": "seunggyu", "name": "승규", "role": "막내", "emoji": "👦🏻"}
 ]
 
-# 구글 시트 연동
 def load_watchlist(user_id):
     try:
         sheet_url = "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID_HERE/edit#gid=0"
@@ -75,7 +88,6 @@ def load_watchlist(user_id):
 
 # --- 3. 화면별 함수 정의 ---
 
-# [화면 1] 로그인/프로필 선택
 def show_login_screen():
     st.markdown("<h1 style='text-align: center; color: #191f28; margin-top: 30px;'>누가 오셨나요?</h1>", unsafe_allow_html=True)
     
@@ -95,22 +107,21 @@ def show_login_screen():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 일상 공유하기 탭
-    if st.button("", key="go_sns_tab"):
-        st.session_state['current_page'] = 'FamilySNS'
-        st.rerun()
-    st.markdown("""
-        <div class="sns-tab">
+    # 수정된 부분: 버튼 내부에 디자인 HTML을 직접 삽입 (클릭 에러 완벽 해결)
+    sns_html = """
+        <div class="sns-btn-layout">
             <div style="font-size: 24px; margin-right: 15px;">📸</div>
-            <div style="text-align: left; flex-grow:1;">
+            <div style="flex-grow:1;">
                 <div style="font-size: 16px; font-weight: 700; color: #191f28;">일상 공유하기</div>
                 <div style="font-size: 13px; color: #8b95a1;">오늘 가족들에게 하고 싶은 말이 있나요?</div>
             </div>
             <div style="color: #B0B8C1;">❯</div>
         </div>
-    """, unsafe_allow_html=True)
+    """
+    if st.button(sns_html, key="go_sns_tab"):
+        st.session_state['current_page'] = 'FamilySNS'
+        st.rerun()
 
-# [화면 2] 홈화면 (로그인 후)
 def show_home():
     user = next(m for m in family_members if m['id'] == st.session_state['user_id'])
     
@@ -131,21 +142,19 @@ def show_home():
     if st.button("", key="go_stock_page"): st.session_state['current_page'] = 'Stock'; st.rerun()
     st.markdown('<div class="toss-card"><div class="icon-box">📈</div><div><div style="font-weight:700;">주식 분석 대시보드</div><div style="color:#8b95a1; font-size:13px;">전문가용 퀀트 분석</div></div></div>', unsafe_allow_html=True)
 
-# [화면 3] 일상 공유 상세 페이지
 def show_sns_page():
     if st.button("❮ 홈으로", key="back_home"):
         st.session_state['current_page'] = 'Home'; st.session_state['speaking_id'] = None; st.rerun()
     
     st.title("📸 가족 게시판")
-    st.write("말풍선을 클릭하여 메시지를 남겨보세요.")
-
+    
     for m in family_members:
         with st.container():
             col_name, col_bubble = st.columns([1, 4])
             with col_name:
                 st.markdown(f"<div style='margin-top:10px; font-weight:700;'>{m['emoji']} {m['name']}</div>", unsafe_allow_html=True)
             with col_bubble:
-                if st.button(f"이야기 듣고 싶어요! 💬", key=f"bubble_{m['id']}"):
+                if st.button(f"{m['name']} SAYS... 💬", key=f"bubble_{m['id']}"):
                     st.session_state['speaking_id'] = m['id']
                     st.rerun()
 
