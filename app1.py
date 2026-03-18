@@ -10,7 +10,7 @@ import urllib.parse
 import time
 
 # --- 1. 페이지 설정 및 토스/모바일 스타일 CSS ---
-st.set_page_config(page_title="우리 가족 스마트 금융 매니저", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="매니저 JS", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -19,15 +19,15 @@ st.markdown("""
     
     /* 메인페이지 카드 스타일 */
     .main-card {
-        background-color: white;
-        border-radius: 20px;
+        background-color: Black;
+        border-radius: 15px;
         padding: 30px;
         border: 1px solid #e5e8eb;
         text-align: center;
         transition: transform 0.2s, box-shadow 0.2s;
         cursor: pointer;
         height: 100%;
-        margin-bottom: 20px;
+        margin-bottom: 15px;
     }
     .main-card:hover {
         transform: translateY(-5px);
@@ -66,23 +66,23 @@ def move_to(page_name):
 
 # A. 메인페이지 (홈화면)
 def show_home():
-    st.title("🏠 우리 가족 금융 매니저")
-    st.markdown("<h2 style='text-align:center; color:#8b95a1;'>보고 싶은 금융 정보를 선택해 주세요</h2><br>", unsafe_allow_html=True)
+    st.title("우리가족 금융 Dashboard")
+    st.markdown("<h2 style='text-align:center; color:#8b95a1;'>♡ </h2><br>", unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
         st.markdown("""<div class="main-card">
             <div class="card-icon">📈</div>
-            <div class="card-title">주식 분석 대시보드</div>
-            <div class="card-desc">기업의 주가와 퀀트 지표를<br>한눈에 분석합니다.</div>
+            <div class="card-title">Stock Dashboard</div>
+            <div class="card-desc">증시와 지표를<br>한눈에 분석합니다.</div>
         </div>""", unsafe_allow_html=True)
         if st.button("들어가기", key="go_stock"): move_to('StockAnalysis')
 
     with col2:
         st.markdown("""<div class="main-card">
             <div class="card-icon">💰</div>
-            <div class="card-title">가상 포트폴리오</div>
+            <div class="card-title">Portfolio </div>
             <div class="card-desc">우리 가족 가상 수익률과<br>자산 현황을 관리합니다.</div>
         </div>""", unsafe_allow_html=True)
         if st.button("준비 중", key="go_port", disabled=True): pass # disabled=True로 나중에 구현 예정 표시
@@ -90,8 +90,8 @@ def show_home():
     with col3:
         st.markdown("""<div class="main-card">
             <div class="card-icon">🧑‍🏫</div>
-            <div class="card-title">가족 퀀트 교실</div>
-            <div class="card-desc">아이들도 쉽게 배우는<br>퀀트 투자 이야기를 공유합니다.</div>
+            <div class="card-title">개인 일상</div>
+            <div class="card-desc">일상 이야기를 공유합니다.</div>
         </div>""", unsafe_allow_html=True)
         if st.button("준비 중", key="go_edu", disabled=True): pass
 
