@@ -64,7 +64,7 @@ def show_login_screen():
     st.markdown("<br>", unsafe_allow_html=True)
 
     # 하단 일상 공유하기 배너 (화이트 카드 스타일)
-    sns_label = "📸   일상 공유하기\n오늘 가족들에게 하고 싶은 말이 있나요?       ❯"
+    sns_label = "📸   일상 공유하기\n\n오늘 가족들에게 하고 싶은 말이 있나요?       ❯"
     if st.button(sns_label, key="go_sns_tab"):
         st.session_state['current_page'] = 'FamilySNS'
         st.rerun()
