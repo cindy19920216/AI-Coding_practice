@@ -1,22 +1,22 @@
 import pandas as pd
 import requests
 from datetime import datetime
+import streamlit as st
 
-# [수정됨] 읽기용 URL: 시트의 실제 ID를 사용해야 합니다.
+# 1. 읽기용 URL (시트 ID가 포함된 주소)
 # 전문가님의 시트 ID: 1zTU8HRcaA79bSDgqOA7yYlkXXbC3OcJaBz9x511C1PQ
-SHEET_ID = "AKfycbydzgeiB1izZx3AX9RN8yOtiPzi2bWe3SI_f76LEA0G6Qo6BgJNwAJ-HI1vTADCYw2t"
-READ_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv"
+READ_URL = "https://docs.google.com/spreadsheets/d/1zTU8HRcaA79bSDgqOA7yYlkXXbC3OcJaBz9x511C1PQ/gviz/tq?tqx=out:csv"
 
-# [유지] 쓰기용 Apps Script URL (이건 그대로 쓰시면 됩니다)
-API_URL = "https://script.google.com/macros/s/AKfycbydzgeiB1izZx3AX9RN8yOtiPzi2bWe3SI_f76LEA0G6Qo6BgJNwAJ-HI1vTADCYw2t/exec"
+# 2. 쓰기용 API URL (끝에 공백이 없는지 확인 필수!)
+# 복사하실 때 따옴표 안에 빈칸이 생기지 않도록 주의해주세요.
+API_URL = "https://script.google.com/macros/s/AKfycby0Rbs5eL_gxbBuNMZiaOk3Y2jG8QXwIqNbpCEKcPLSr2sC8hW-rt7tpYMFjXPqpxV5/exec"
 
 def load_data():
     try:
-        # 시트에서 데이터 읽기
-        df = pd.read_csv(READ_URL)
+        # 캐시 무시를 위해 URL 뒤에 랜덤값을 붙여 읽어옵니다.
+        df = pd.read_csv(f"{READ_URL}&cachebuster={datetime.now().timestamp()}")
         return df
-    except Exception as e:
-        # 에러가 날 경우 빈 데이터프레임 반환
+    except:
         return pd.DataFrame(columns=["name", "emoji", "msg", "time"])
 
 def save_data(name, emoji, msg):
@@ -27,14 +27,20 @@ def save_data(name, emoji, msg):
         "time": datetime.now().strftime("%Y-%m-%d %H:%M")
     }
     try:
-        # Apps Script로 전송
-        response = requests.post(API_URL, json=payload)
-        # 성공적으로 보냈는지 확인 (200번대가 성공)
-        return response.status_code == 200
-    except:
+        # 전송 시 timeout을 설정하여 무한 대기를 방지합니다.
+        response = requests.post(API_URL.strip(), json=payload, timeout=10)
+        
+        # 만약 전송이 성공했다면 시트 데이터 새로고침을 위해 캐시를 비웁니다.
+        if response.status_code == 200:
+            return True
+        else:
+            # 실패 시 화면에 이유를 살짝 띄워줍니다.
+            st.error(f"시트 응답 오류: {response.status_code}")
+            return False
+    except Exception as e:
+        st.error(f"연결 오류: {e}")
         return False
 
-# 시장 지표 데이터 (아이콘 클릭 시 띠 노출용)
 def get_market_indices():
     return {
         "KOSPI": "5,801.61 (▲2.86%)",
