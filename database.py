@@ -20,18 +20,14 @@ def load_data():
     except:
         return pd.DataFrame(columns=["name", "emoji", "msg", "time"])
 
+# database.py를 로컬 저장 방식으로 잠시 변경
 def save_data(name, emoji, msg):
-    # JSON이 아닌 일반 폼 데이터 형식으로 전송 (Apps Script가 더 잘 먹을 때가 있음)
-    params = {
-        "name": name,
-        "emoji": emoji,
-        "msg": msg,
-        "time": datetime.now().strftime("%Y-%m-%d %H:%M")
-    }
     try:
-        # json=payload 대신 params=params 사용
-        response = requests.post(API_URL.strip(), params=params, timeout=15)
-        return True # 응답 코드 상관없이 일단 보냈으면 성공으로 간주하고 시트 확인
+        new_data = pd.DataFrame([[name, emoji, msg, datetime.now()]], 
+                                columns=["name", "emoji", "msg", "time"])
+        # csv 파일로 내 컴퓨터에 바로 저장
+        new_data.to_csv("family_data.csv", mode='a', header=False, index=False)
+        return True
     except:
         return False
         
