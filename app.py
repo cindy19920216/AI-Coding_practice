@@ -1,123 +1,68 @@
 import streamlit as st
-import yfinance as yf
-import pandas as pd
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from datetime import datetime, timedelta
-from deep_translator import GoogleTranslator
-import feedparser # 뉴스 RSS를 읽기 위한 라이브러리 (requirements.txt 추가 필요)
-import urllib.parse
+from styles import apply_styles
+from database import load_data, save_data
 
-# 1. 페이지 설정 및 스타일
-st.set_page_config(page_title="재선의 스마트 주식 대시보드", layout="wide")
+st.set_page_config(page_title="우리 가족 스마트 금융", layout="wide", initial_sidebar_state="collapsed")
+apply_styles()
 
-st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&display=swap');
-    html, body, [class*="css"] {
-        font-family: 'Nanum Gothic', sans-serif;
-        font-size: 0.8rem !important;
-    }
-    h1 { font-size: 1.8rem !important; }
-    h2 { font-size: 1.4rem !important; }
-    </style>
-    """, unsafe_allow_html=True)
+if 'user_id' not in st.session_state: st.session_state['user_id'] = None
+if 'current_page' not in st.session_state: st.session_state['current_page'] = 'Home'
+if 'speaking_id' not in st.session_state: st.session_state['speaking_id'] = None
 
-# 사이드바 설정
-st.sidebar.header("⚙️ 설정")
-ticker = st.sidebar.text_input("티커 입력 (삼성전자: 005930.KS / 애플: AAPL)", value="005930.KS")
-days = st.sidebar.slider("분석 기간(일)", 30, 730, 365)
-start_date = datetime.now() - timedelta(days=days)
+family_members = [
+    {"id": "chanhee", "name": "찬희", "emoji": "👨🏻‍💻"},
+    {"id": "jiwoo", "name": "지우", "emoji": "👩🏻‍💼"},
+    {"id": "jaeseon", "name": "재선", "emoji": "👩🏻‍🎨"},
+    {"id": "gyubi", "name": "규비", "emoji": "👧🏻"},
+    {"id": "seunggyu", "name": "승규", "emoji": "👦🏻"}
+]
 
-# 기능 함수들
-def translate_text(text, target_lang='ko'):
-    try: return GoogleTranslator(source='auto', target=target_lang).translate(text)
-    except: return text
+def show_login_screen():
+    st.markdown("<h1 style='text-align:center;'>누가 오셨나요?</h1>", unsafe_allow_html=True)
+    for m in family_members:
+        if st.button(f"{m['emoji']}  {m['name']}", key=f"sel_{m['id']}"):
+            st.session_state['user_id'] = m['id']; st.rerun()
+    st.write("")
+    if st.button("📸   일상 공유하기\n\n오늘 가족들에게 하고 싶은 말이 있나요?       ❯", key="go_sns_tab"):
+        st.session_state['current_page'] = 'FamilySNS'; st.rerun()
 
-def get_korean_news(search_term):
-    """구글 뉴스 RSS를 이용해 한국어 뉴스를 가져옵니다."""
-    encoded_search = urllib.parse.quote(search_term)
-    rss_url = f"https://news.google.com/rss/search?q={encoded_search}&hl=ko&gl=KR&ceid=KR:ko"
-    feed = feedparser.parse(rss_url)
-    return feed.entries[:5]
-
-def calculate_rsi(data, window=14):
-    delta = data.diff()
-    up, down = delta.clip(lower=0), -1 * delta.clip(upper=0)
-    ema_up = up.ewm(com=window-1, adjust=False).mean()
-    ema_down = down.ewm(com=window-1, adjust=False).mean()
-    rs = ema_up / ema_down
-    return 100 - (100 / (1 + rs))
-
-@st.cache_data
-def load_data(symbol, start):
-    df = yf.download(symbol, start=start)
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-    return df
-
-# 데이터 로드 및 기업명 설정
-df = load_data(ticker, start_date)
-stock_info = yf.Ticker(ticker)
-
-# 한국 주식일 경우 이름을 더 잘 가져오기 위한 처리
-try:
-    company_name = stock_info.info.get('longName') or stock_info.info.get('shortName') or ticker
-except:
-    company_name = ticker
-
-if df is not None and not df.empty:
-    # 지표 계산
-    df['MA5'] = df['Close'].rolling(window=5).mean()
-    df['MA20'] = df['Close'].rolling(window=20).mean()
-    df['MA60'] = df['Close'].rolling(window=60).mean()
-    df['MA120'] = df['Close'].rolling(window=120).mean()
-    df['RSI'] = calculate_rsi(df['Close'])
-    current_rsi = df['RSI'].iloc[-1]
-
-    st.title(f"📈 {company_name} 분석 대시보드")
-
-    # 차트 구성
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, 
-                        vertical_spacing=0.1, 
-                        subplot_titles=(f'{company_name} 주가 및 이평선', f'RSI (현재 수치: {current_rsi:.2f})'),
-                        row_width=[0.3, 0.7])
-
-    # 캔들스틱 (상승 빨강 / 하락 파랑)
-    fig.add_trace(go.Candlestick(
-        x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
-        name='가격',
-        increasing_line_color='#FF3232',
-        decreasing_line_color='#0066FF'
-    ), row=1, col=1)
+def show_sns_page():
+    if st.button("❮ 홈으로 돌아가기", key="back_home"):
+        st.session_state['current_page'] = 'Home'; st.session_state['speaking_id'] = None; st.rerun()
     
-    # 이평선 색상
-    ma_colors = {'MA5': '#FF4500', 'MA20': '#1E90FF', 'MA60': '#32CD32', 'MA120': '#FF69B4'}
-    for ma, color in ma_colors.items():
-        fig.add_trace(go.Scatter(x=df.index, y=df[ma], line=dict(color=color, width=1.2), name=ma), row=1, col=1)
+    st.markdown("## 📸 가족 게시판")
+    for m in family_members:
+        col_n, col_b = st.columns([1.5, 3])
+        with col_n: st.markdown(f"**{m['emoji']} {m['name']}**")
+        with col_b:
+            if st.button("이야기하기 💬", key=f"bubble_{m['id']}"):
+                st.session_state['speaking_id'] = m['id']; st.rerun()
 
-    # RSI (검은색)
-    fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], line=dict(color='black', width=2), name='RSI'), row=2, col=1)
-    fig.add_hline(y=70, line_dash="dash", line_color="red", row=2, col=1)
-    fig.add_hline(y=30, line_dash="dash", line_color="blue", row=2, col=1)
-
-    fig.update_layout(template="plotly_white", height=700, xaxis_rangeslider_visible=False)
-    st.plotly_chart(fig, use_container_width=True)
-
-    # 뉴스 섹션 (한국 주식용 최적화)
-    st.subheader(f"📰 {company_name} 최신 뉴스")
+        if st.session_state['speaking_id'] == m['id']:
+            with st.form(key=f"form_{m['id']}", clear_on_submit=True):
+                msg = st.text_input("소식을 남겨주세요", label_visibility="collapsed")
+                if st.form_submit_button("가족과 공유"):
+                    if msg and save_data(m['name'], m['emoji'], msg):
+                        st.session_state['speaking_id'] = None
+                        st.rerun()
     
-    # 한국 주식은 기업 이름으로 검색, 미국 주식은 기존 방식 병행
-    search_keyword = company_name if ".KS" in ticker or ".KQ" in ticker else ticker
-    news_items = get_korean_news(search_keyword)
-    
-    if news_items:
-        for item in news_items:
-            with st.container():
-                st.write(f"**🔗 {item.title}**")
-                st.write(f"게시일: {item.published} | [기사 보기]({item.link})")
-                st.write("---")
-    else:
-        st.write("최신 뉴스를 가져올 수 없습니다.")
+    st.markdown("---")
+    st.subheader("💬 실시간 가족 피드")
+    df = load_data()
+    if not df.empty:
+        for _, row in df.iloc[::-1].head(10).iterrows():
+            st.markdown(f"""
+                <div class="feed-card">
+                    <b>{row['emoji']} {row['name']}</b> <span style="float:right; color:gray; font-size:12px;">{row['time']}</span>
+                    <div style="margin-top:5px;">{row['msg']}</div>
+                </div>
+            """, unsafe_allow_html=True)
+
+if st.session_state['user_id'] is None and st.session_state['current_page'] == 'Home':
+    show_login_screen()
+elif st.session_state['current_page'] == 'FamilySNS':
+    show_sns_page()
 else:
-    st.error("데이터 로드 실패. 티커를 확인해 주세요 (예: 삼성전자는 005930.KS)")
+    user = next(m for m in family_members if m['id'] == st.session_state['user_id'])
+    st.markdown(f"### {user['emoji']} {user['name']}님 반가워요!")
+    if st.button("로그아웃"): st.session_state['user_id'] = None; st.rerun()
