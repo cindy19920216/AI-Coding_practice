@@ -19,9 +19,6 @@ family_members = [
 
 def show_login_screen():
     # app.py의 show_login_screen 함수 하단에 추가
-def show_login_screen():
-    # ... 기존 로그인 버튼 코드 ...
-
     st.markdown("---") # 구분선
     
     # 우측 빈 공간을 채울 위젯 구성
