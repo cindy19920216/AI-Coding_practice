@@ -5,11 +5,11 @@ import streamlit as st
 
 # 1. 읽기용 URL (시트 ID가 포함된 주소)
 # 전문가님의 시트 ID: 1zTU8HRcaA79bSDgqOA7yYlkXXbC3OcJaBz9x511C1PQ
-READ_URL = "https://docs.google.com/spreadsheets/d/1zTU8HRcaA79bSDgqOA7yYlkXXbC3OcJaBz9x511C1PQ/gviz/tq?tqx=out:csv"
+READ_URL = "https://docs.google.com/spreadsheets/d/AKfycbydzgeiB1izZx3AX9RN8yOtiPzi2bWe3SI_f76LEA0G6Qo6BgJNwAJ-HI1vTADCYw2t/gviz/tq?tqx=out:csv"
 
 # 2. 쓰기용 API URL (끝에 공백이 없는지 확인 필수!)
 # 복사하실 때 따옴표 안에 빈칸이 생기지 않도록 주의해주세요.
-API_URL = "https://script.google.com/macros/s/AKfycby0Rbs5eL_gxbBuNMZiaOk3Y2jG8QXwIqNbpCEKcPLSr2sC8hW-rt7tpYMFjXPqpxV5/exec"
+API_URL = "https://script.google.com/macros/s/AKfycbydzgeiB1izZx3AX9RN8yOtiPzi2bWe3SI_f76LEA0G6Qo6BgJNwAJ-HI1vTADCYw2t/exec"
 
 def load_data():
     try:
