@@ -29,14 +29,13 @@ def save_data(name, emoji, msg):
         "time": datetime.now().strftime("%Y-%m-%d %H:%M")
     }
     try:
-        # 전송 시 timeout을 설정하여 무한 대기를 방지합니다.
-        response = requests.post(API_URL.strip(), json=payload, timeout=10)
+        # allow_redirects=True를 추가하여 구글의 리다이렉션을 허용합니다.
+        response = requests.post(API_URL.strip(), json=payload, timeout=15, allow_redirects=True)
         
-        # 만약 전송이 성공했다면 시트 데이터 새로고침을 위해 캐시를 비웁니다.
-        if response.status_code == 200:
+        # 구글은 성공 시 200 또는 302(이동)를 보냅니다.
+        if response.status_code in [200, 302]:
             return True
         else:
-            # 실패 시 화면에 이유를 살짝 띄워줍니다.
             st.error(f"시트 응답 오류: {response.status_code}")
             return False
     except Exception as e:
