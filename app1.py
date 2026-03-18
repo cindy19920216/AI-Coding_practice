@@ -122,8 +122,6 @@ else:
         if st.button("❮ 홈으로"): st.session_state['current_page'] = 'Home'; st.rerun()
         st.title(f"📈 {st.session_state['user_name']}님의 주식 분석")
         # 여기에 이전의 상세 주식 분석 코드를 연결
-# --- [일상 공유하기] 섹션 추가 버전 ---
-
 def show_profile_selection():
     st.markdown("<h1 style='text-align: center; color: #191f28; margin-top: 50px;'>누가 오셨나요?</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #8b95a1; margin-bottom: 40px;'>우리 가족 금융 매니저</p>", unsafe_allow_html=True)
@@ -179,9 +177,9 @@ def show_profile_selection():
 
 # --- 새로운 페이지: FamilySNS 정의 ---
 def show_family_sns():
-    st.markdown("<h2 style='text-align:center;'>📸 우리 가족 일상</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align:center;'>📸 일상 공유 </h2>", unsafe_allow_html=True)
     if st.button("❮ 뒤로가기"):
         st.session_state['current_page'] = 'Home'
         st.rerun()
     
-    st.info("여기에 가족들이 올린 사진이나 짧은 글이 피드 형태로 나타나게 됩니다. (구글 시트 연동 가능)")
+    st.info("가족들이 올린 사진이나 짧은 글이 피드 형태로 나타나게 됩니다")
