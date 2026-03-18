@@ -90,24 +90,51 @@ def show_login_screen():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 2. 일상 공유하기 탭 디자인 고정
-    st.markdown("""
-        <div class="sns-tab-design">
-            <div style="font-size: 24px; margin-right: 15px;">📸</div>
-            <div style="text-align: left; flex-grow:1;">
-                <div style="font-size: 16px; font-weight: 700; color: #191f28;">일상 공유하기</div>
-                <div style="font-size: 13px; color: #8b95a1;">오늘 가족들에게 하고 싶은 말이 있나요?</div>
-            </div>
-            <div style="color: #B0B8C1;">❯</div>
-        </div>
-    """, unsafe_allow_html=True)
+ # [화면 1] 로그인/프로필 선택 부분의 '일상 공유하기' 섹션 수정
+
+# 1. CSS 수정 (기존 스타일에 추가하거나 덮어쓰세요)
+st.markdown("""
+    <style>
+    /* 버튼 내부의 기본 여백을 제거하고 디자인과 일치시킴 */
+    div.stButton > button[key="go_sns_tab"] {
+        height: 100px !important;
+        padding: 0 !important; /* 버튼 자체 패딩 제거 */
+        border: 1px solid #e5e8eb !important;
+        background-color: white !important;
+        border-radius: 20px !important;
+        width: 100% !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.03) !important;
+    }
     
-    # 탭 위에 투명 버튼 덮기 (공간 확보를 위해 상단 마진 조정)
-    st.markdown("<div style='margin-top: -85px;'>", unsafe_allow_html=True)
-    if st.button("", key="go_sns_tab"):
-        st.session_state['current_page'] = 'FamilySNS'
-        st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
+    /* 버튼 내부의 HTML 레이아웃 정렬 */
+    .sns-button-content {
+        display: flex;
+        align-items: center;
+        padding: 20px;
+        width: 100%;
+        height: 100%;
+        text-align: left;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# 2. 버튼 구현부 (여기가 전문가님이 말씀하신 잘못된 부분을 대체할 코드입니다)
+# 버튼의 label 안에 HTML을 직접 넣어서 클릭 영역을 100% 일치시킵니다.
+sns_html = f"""
+    <div class="sns-button-content">
+        <div style="font-size: 24px; margin-right: 15px;">📸</div>
+        <div style="flex-grow:1;">
+            <div style="font-size: 16px; font-weight: 700; color: #191f28;">일상 공유하기</div>
+            <div style="font-size: 13px; color: #8b95a1;">오늘 가족들에게 하고 싶은 말이 있나요?</div>
+        </div>
+        <div style="color: #B0B8C1;">❯</div>
+    </div>
+"""
+
+# label_visibility="collapsed"와 함께 버튼 실행
+if st.button(sns_html, key="go_sns_tab"):
+    st.session_state['current_page'] = 'FamilySNS'
+    st.rerun()
 
 def show_sns_page():
     if st.button("❮ 홈으로", key="back_home"):
