@@ -318,6 +318,121 @@ for ax, theme in zip(axes, all_themes_sorted):
 plt.suptitle('KRX300 대형주 기준 테마별 핵심 관련주', fontsize=14, fontweight='bold', y=1.02)
 plt.tight_layout()
 plt.savefig(os.path.join(RESULT_PATH, 'chart2_top_stocks.png'), dpi=150, bbox_inches='tight')
+plt.close()
 print("chart2_top_stocks.png 저장")
 
-print("\n전체 완료!")
+# ── 시각화 1: 월별 테마 변화표 ──
+rank_pivot = monthly_top_df.pivot(index='month', columns='rank', values='theme')
+rank_pivot.columns = [f'{c}위' for c in rank_pivot.columns]
+fig, ax = plt.subplots(figsize=(10, len(rank_pivot) * 0.6 + 2))
+ax.set_facecolor('#0f1117'); fig.patch.set_facecolor('#0f1117')
+CELL_COLORS = ['#1d3557', '#457B9D', '#A8DADC', '#F1FAEE', '#E63946']
+for ci, col in enumerate(rank_pivot.columns):
+    for ri, val in enumerate(rank_pivot[col]):
+        bg = CELL_COLORS[ci] if ci < len(CELL_COLORS) else '#888888'
+        ax.add_patch(plt.Rectangle((ci, ri), 1, 1, fill=True, color=bg,
+                     alpha=0.9, linewidth=0.5, edgecolor='white'))
+        ax.text(ci + 0.5, ri + 0.5, str(val) if pd.notna(val) else '-',
+                ha='center', va='center', fontsize=10,
+                color='white' if ci <= 2 else '#111111')
+ax.set_xlim(0, len(rank_pivot.columns)); ax.set_ylim(0, len(rank_pivot))
+ax.set_xticks([i + 0.5 for i in range(len(rank_pivot.columns))])
+ax.set_xticklabels(rank_pivot.columns, fontsize=11, color='white')
+ax.set_yticks([i + 0.5 for i in range(len(rank_pivot))])
+ax.set_yticklabels(rank_pivot.index, fontsize=10, color='white')
+ax.set_title('월별 텔레그램 TOP5 테마 변화 (노이즈 필터 적용)', fontsize=13,
+             fontweight='bold', color='white', pad=12)
+plt.tight_layout()
+plt.savefig(os.path.join(RESULT_PATH, 'chart1_monthly_theme_change.png'),
+            dpi=150, bbox_inches='tight', facecolor='#0f1117')
+plt.close()
+print("chart1_monthly_theme_change.png 저장")
+
+# ── 시각화 3: 감성점수 vs 익일 수익률 산점도 ──
+n = len(all_themes_sorted)
+fig, axes = plt.subplots(1, n, figsize=(5 * n, 4))
+if n == 1: axes = [axes]
+for ax, theme in zip(axes, all_themes_sorted):
+    sub = merged[merged['theme'] == theme].dropna(subset=['sentiment_score', 'return_1d'])
+    if sub.empty: continue
+    ax.scatter(sub['sentiment_score'], sub['return_1d'], alpha=0.4, s=20, color='#2A9D8F')
+    try:
+        z  = np.polyfit(sub['sentiment_score'], sub['return_1d'], 1)
+        xs = np.linspace(sub['sentiment_score'].min(), sub['sentiment_score'].max(), 100)
+        ax.plot(xs, np.poly1d(z)(xs), 'r--', linewidth=1.5)
+    except (np.linalg.LinAlgError, ValueError):
+        pass
+    corr = sub['sentiment_score'].corr(sub['return_1d'])
+    ax.set_title(f'{theme}\n상관계수: {corr:+.3f}', fontsize=11)
+    ax.set_xlabel('감성 점수'); ax.set_ylabel('익일 수익률')
+    ax.axhline(0, color='gray', linewidth=0.5); ax.axvline(0, color='gray', linewidth=0.5)
+plt.suptitle('테마 감성점수 vs 익일 주가 수익률 (KRX300)', fontsize=14, fontweight='bold', y=1.02)
+plt.tight_layout()
+plt.savefig(os.path.join(RESULT_PATH, 'chart3_sentiment_corr.png'),
+            dpi=150, bbox_inches='tight')
+plt.close()
+print("chart3_sentiment_corr.png 저장")
+
+# ── 시각화 4: 월별 감성점수 히트맵 ──
+pivot = sentiment_df.groupby(['month', 'theme'])['score'].mean().unstack('theme')
+if not pivot.empty:
+    fig, ax = plt.subplots(figsize=(max(8, len(pivot.columns) * 1.5),
+                                    max(5, len(pivot) * 0.6)))
+    sns.heatmap(pivot, cmap='RdYlGn', center=0, annot=True, fmt='.2f',
+                linewidths=0.5, ax=ax, cbar_kws={'label': '평균 감성점수'})
+    ax.set_title('월별 × 테마별 감성점수 히트맵 (KRX300 기준 테마)', fontsize=13, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(os.path.join(RESULT_PATH, 'chart4_sentiment_heatmap.png'),
+                dpi=150, bbox_inches='tight')
+    plt.close()
+    print("chart4_sentiment_heatmap.png 저장")
+
+# ── 시각화 5: 텔레그램 월별 언급량 추이 ──
+tg_files = [
+    os.path.join(TG_DATA_PATH, f) for f in os.listdir(TG_DATA_PATH)
+    if f.startswith('telegram_data_') and f.endswith('.csv')
+]
+if tg_files:
+    tg_df = pd.concat([pd.read_csv(f) for f in sorted(tg_files)], ignore_index=True)
+    tg_df['Date']      = pd.to_datetime(tg_df['Date'])
+    tg_df['month_str'] = tg_df['Date'].dt.to_period('M').astype(str)
+    tg_df['Message']   = tg_df['Message'].astype(str)
+
+    monthly_counts = []
+    for theme in all_themes_sorted:
+        stocks   = list(theme_code_map.get(theme, {}).keys())
+        keywords = [theme] + [s for s in stocks if len(s) > 1]
+        pattern  = '|'.join(map(re.escape, keywords))
+        mask     = tg_df['Message'].str.contains(pattern, na=False)
+        counts   = tg_df[mask].groupby('month_str').size().reset_index(name='count')
+        counts['theme'] = theme
+        monthly_counts.append(counts)
+
+    monthly_df = pd.concat(monthly_counts, ignore_index=True)
+    fig, ax = plt.subplots(figsize=(12, 5))
+    for theme in all_themes_sorted:
+        sub = monthly_df[monthly_df['theme'] == theme]
+        ax.plot(sub['month_str'], sub['count'], marker='o', label=theme, linewidth=2)
+    ax.set_title('텔레그램 채널 월별 테마 언급량 추이 (KRX300 기준)', fontsize=13, fontweight='bold')
+    ax.set_xlabel('월'); ax.set_ylabel('언급 횟수')
+    ax.legend(fontsize=8); ax.grid(alpha=0.3); plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig(os.path.join(RESULT_PATH, 'chart5_monthly_trend.png'),
+                dpi=150, bbox_inches='tight')
+    plt.close()
+    print("chart5_monthly_trend.png 저장")
+
+# ── 시각화 6: XGBoost 피처 중요도 ──
+fig, ax = plt.subplots(figsize=(7, 4))
+colors = ['#E63946' if i == 0 else '#457B9D' for i in range(len(importance))]
+ax.barh(importance['feature'][::-1], importance['importance'][::-1],
+        color=colors[::-1], edgecolor='white')
+ax.set_title('XGBoost 피처 중요도 (KRX300 대형주 기준)', fontsize=12, fontweight='bold')
+ax.set_xlabel('Importance')
+plt.tight_layout()
+plt.savefig(os.path.join(RESULT_PATH, 'chart6_feature_importance.png'),
+            dpi=150, bbox_inches='tight')
+plt.close()
+print("chart6_feature_importance.png 저장")
+
+print("\n전체 완료! 차트 1~6 모두 업데이트됨")
