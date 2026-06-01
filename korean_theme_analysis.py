@@ -19,7 +19,7 @@ pip install yfinance xgboost scikit-learn pygooglenews feedparser
 pip install pandas requests beautifulsoup4 matplotlib seaborn
 """
 
-import os, re, time, calendar, requests
+import os, re, time, calendar, requests, json
 from datetime import datetime
 from collections import Counter
 
@@ -45,6 +45,12 @@ RESULT_PATH  = os.path.join(BASE_DIR, 'results')
 TOP_N      = 5
 BATCH_SIZE = 50
 STOPWORDS  = {'증권', '투자', '시장', '금융', '경제', '주식'}
+
+# Gemini API 설정 (키워드 방식 대신 LLM 감성 분석 사용 시)
+# 발급: https://aistudio.google.com/apikey
+GEMINI_API_KEY   = os.environ.get('GEMINI_API_KEY', '')   # 환경변수 우선
+GEMINI_MODEL     = 'gemini-1.5-flash'
+GEMINI_BATCH_SIZE = 20   # 한 번 API 호출당 처리 기사 수 (rate limit 고려)
 
 # 특정 테마가 노이즈 복합어로 언급될 때 제외
 # 동작 방식: 메시지에서 아래 복합어를 먼저 지운 뒤 테마명이 남으면 카운트
@@ -249,8 +255,10 @@ def collect_monthly_news(monthly_tops: dict) -> pd.DataFrame:
 
 
 # ==============================================================
-# STEP 3. 한국어 금융 키워드 감성 분석
+# STEP 3. 감성 분석 (키워드 방식 OR Gemini LLM 방식)
 # ==============================================================
+
+# ── 방식 A: 키워드 사전 ──────────────────────────────────────
 
 def analyze_sentiment_keyword(text: str) -> dict:
     pos = sum(1 for k in POS_KEYWORDS if k in text)
@@ -260,22 +268,137 @@ def analyze_sentiment_keyword(text: str) -> dict:
     return {'label': '중립', 'score': 0}
 
 
-def run_sentiment_analysis(news_df: pd.DataFrame) -> pd.DataFrame:
+# ── 방식 B: Gemini LLM (문맥 이해) ──────────────────────────
+
+_GEMINI_SYSTEM = """당신은 한국 주식시장 전문 감성 분석가입니다.
+뉴스 기사가 해당 주식·테마의 주가에 미칠 영향을 3단계로 분류하세요.
+
+분류 기준:
+- 긍정(1) : 실적 개선, 수주·계약, 신기술 성공, 투자 확대, 목표주가 상향 등 호재
+- 부정(-1): 실적 악화, 손실·적자, 소송·제재, 구조조정, 목표주가 하향 등 악재
+- 중립(0) : 단순 사실 전달, 방향성 불명확, 인사·일정 공지 등
+
+핵심 규칙 (문맥 우선):
+- "상승 기대감 꺾여" → 부정  |  "하락 우려 해소" → 긍정
+- "선방했다" → 긍정  |  "기대에 못 미쳤다" → 부정
+- 부정어 + 긍정단어 조합은 반드시 전체 문맥으로 판단"""
+
+
+def _parse_gemini_json(text: str, batch_ids: list) -> list:
+    """Gemini 응답 파싱, 실패 시 중립 fallback"""
+    try:
+        cleaned = text.strip()
+        if '```' in cleaned:
+            parts = cleaned.split('```')
+            cleaned = parts[1].lstrip('json').strip() if len(parts) > 1 else cleaned
+        return json.loads(cleaned)
+    except Exception:
+        return [{'id': i, 'label': '중립', 'score': 0} for i in batch_ids]
+
+
+def _analyze_gemini_batch(model, batch_rows: list) -> dict:
+    """
+    batch_rows: [{'id': int, 'text': str}, ...]
+    returns: {id: {'label': str, 'score': int}}
+    """
+    articles_json = json.dumps(
+        [{'id': r['id'], 'text': r['text'][:300]} for r in batch_rows],
+        ensure_ascii=False
+    )
+    prompt = (
+        "다음 기사들을 분석하고 JSON 배열만 출력하세요. 다른 설명 없이 JSON만.\n\n"
+        f"기사:\n{articles_json}\n\n"
+        "출력 형식: [{\"id\":1,\"label\":\"긍정\",\"score\":1}, ...]"
+    )
+    try:
+        resp = model.generate_content(prompt)
+        results = _parse_gemini_json(resp.text, [r['id'] for r in batch_rows])
+    except Exception as e:
+        print(f"(Gemini 오류: {e})", end=" ")
+        results = [{'id': r['id'], 'label': '중립', 'score': 0} for r in batch_rows]
+    return {r['id']: r for r in results}
+
+
+def analyze_sentiment_gemini(news_df: pd.DataFrame, api_key: str) -> pd.DataFrame:
+    """Gemini API 배치 처리 감성 분석"""
+    try:
+        import google.generativeai as genai
+    except ImportError:
+        raise ImportError("pip install google-generativeai 실행 후 재시도하세요.")
+
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(
+        GEMINI_MODEL,
+        system_instruction=_GEMINI_SYSTEM,
+    )
+
+    df = news_df.copy().reset_index(drop=True)
+    total = len(df)
+    id_to_result: dict = {}
+
+    for start in range(0, total, GEMINI_BATCH_SIZE):
+        end = min(start + GEMINI_BATCH_SIZE, total)
+        batch_rows = [
+            {'id': i, 'text': str(df.at[i, 'text'] if 'text' in df.columns else df.at[i, 'title'])}
+            for i in range(start, end)
+        ]
+        print(f"  [{start+1}~{end}/{total}] Gemini 분석...", end=" ", flush=True)
+        id_to_result.update(_analyze_gemini_batch(model, batch_rows))
+        print("완료")
+        time.sleep(2)  # 무료 15 RPM 대응
+
+    rows = []
+    for i, row in df.iterrows():
+        res = id_to_result.get(i, {'label': '중립', 'score': 0})
+        rows.append({
+            'date': row['date'], 'month': row['month'],
+            'theme': row['theme'], 'title': row.get('title', ''),
+            'label': res.get('label', '중립'), 'score': int(res.get('score', 0)),
+        })
+    result_df = pd.DataFrame(rows)
+    _print_sentiment_stats(result_df, method='Gemini')
+    return result_df
+
+
+def _print_sentiment_stats(df: pd.DataFrame, method: str = '키워드') -> None:
+    pos = (df['label'] == '긍정').sum()
+    neg = (df['label'] == '부정').sum()
+    neu = (df['label'] == '중립').sum()
+    total = len(df)
+    print(f"\n[{method}] 감성 분석 완료: {total}건  "
+          f"긍정:{pos}({pos/total*100:.0f}%) / "
+          f"부정:{neg}({neg/total*100:.0f}%) / "
+          f"중립:{neu}({neu/total*100:.0f}%)")
+
+
+# ── 디스패처: API 키 유무에 따라 자동 선택 ──────────────────
+
+def run_sentiment_analysis(news_df: pd.DataFrame,
+                            gemini_api_key: str = GEMINI_API_KEY) -> pd.DataFrame:
+    """
+    감성 분석 실행.
+    GEMINI_API_KEY 환경변수(또는 인자)가 있으면 Gemini LLM,
+    없으면 키워드 사전 방식으로 자동 전환.
+    """
     if news_df.empty:
         return pd.DataFrame(columns=['date', 'month', 'theme', 'title', 'label', 'score'])
-    results = []
-    for _, row in news_df.iterrows():
-        sent = analyze_sentiment_keyword(str(row.get('text', '')))
-        results.append({
-            'date':  row['date'],  'month': row['month'],
-            'theme': row['theme'], 'title': row.get('title', ''),
-            'label': sent['label'], 'score': sent['score'],
-        })
-    result_df = pd.DataFrame(results)
-    pos = (result_df['label'] == '긍정').sum()
-    neg = (result_df['label'] == '부정').sum()
-    neu = (result_df['label'] == '중립').sum()
-    print(f"감성 분석 완료: 총 {len(result_df)}건  긍정:{pos} / 부정:{neg} / 중립:{neu}")
+
+    if gemini_api_key:
+        print(f"[Gemini] 문맥 기반 감성 분석 (모델: {GEMINI_MODEL})")
+        result_df = analyze_sentiment_gemini(news_df, gemini_api_key)
+    else:
+        print("[키워드] 사전 기반 감성 분석 (Gemini API 키 없음)")
+        rows = []
+        for _, row in news_df.iterrows():
+            sent = analyze_sentiment_keyword(str(row.get('text', '')))
+            rows.append({
+                'date': row['date'], 'month': row['month'],
+                'theme': row['theme'], 'title': row.get('title', ''),
+                'label': sent['label'], 'score': sent['score'],
+            })
+        result_df = pd.DataFrame(rows)
+        _print_sentiment_stats(result_df, method='키워드')
+
     result_df.to_csv(os.path.join(RESULT_PATH, 'sentiment_result.csv'),
                      index=False, encoding='utf-8-sig')
     return result_df
