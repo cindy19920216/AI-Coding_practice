@@ -49,7 +49,7 @@ STOPWORDS  = {'증권', '투자', '시장', '금융', '경제', '주식'}
 # Gemini API 설정 (키워드 방식 대신 LLM 감성 분석 사용 시)
 # 발급: https://aistudio.google.com/apikey
 GEMINI_API_KEY   = os.environ.get('GEMINI_API_KEY', '')   # 환경변수 우선
-GEMINI_MODEL     = 'gemini-1.5-flash'
+GEMINI_MODEL     = 'gemini-2.0-flash'
 GEMINI_BATCH_SIZE = 20   # 한 번 API 호출당 처리 기사 수 (rate limit 고려)
 
 # 특정 테마가 노이즈 복합어로 언급될 때 제외
@@ -320,17 +320,14 @@ def _analyze_gemini_batch(model, batch_rows: list) -> dict:
 
 
 def analyze_sentiment_gemini(news_df: pd.DataFrame, api_key: str) -> pd.DataFrame:
-    """Gemini API 배치 처리 감성 분석"""
+    """Gemini API 배치 처리 감성 분석 (google-genai 신버전)"""
     try:
-        import google.generativeai as genai
+        from google import genai
+        from google.genai import types as genai_types
     except ImportError:
-        raise ImportError("pip install google-generativeai 실행 후 재시도하세요.")
+        raise ImportError("pip install google-genai 실행 후 재시도하세요.")
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(
-        GEMINI_MODEL,
-        system_instruction=_GEMINI_SYSTEM,
-    )
+    client = genai.Client(api_key=api_key)
 
     df = news_df.copy().reset_index(drop=True)
     total = len(df)
@@ -339,11 +336,29 @@ def analyze_sentiment_gemini(news_df: pd.DataFrame, api_key: str) -> pd.DataFram
     for start in range(0, total, GEMINI_BATCH_SIZE):
         end = min(start + GEMINI_BATCH_SIZE, total)
         batch_rows = [
-            {'id': i, 'text': str(df.at[i, 'text'] if 'text' in df.columns else df.at[i, 'title'])}
+            {'id': i, 'text': str(df.at[i, 'text'] if 'text' in df.columns else df.at[i, 'title'])[:300]}
             for i in range(start, end)
         ]
+        prompt = (
+            "다음 기사들을 분석하고 JSON 배열만 출력하세요. 다른 설명 없이 JSON만.\n\n"
+            f"기사:\n{json.dumps(batch_rows, ensure_ascii=False)}\n\n"
+            "출력 형식: [{\"id\":0,\"label\":\"긍정\",\"score\":1}, ...]"
+        )
         print(f"  [{start+1}~{end}/{total}] Gemini 분석...", end=" ", flush=True)
-        id_to_result.update(_analyze_gemini_batch(model, batch_rows))
+        try:
+            resp = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=genai_types.GenerateContentConfig(
+                    system_instruction=_GEMINI_SYSTEM,
+                    temperature=0.1,
+                ),
+            )
+            results = _parse_gemini_json(resp.text, [r['id'] for r in batch_rows])
+        except Exception as e:
+            print(f"오류({e})", end=" ")
+            results = [{'id': r['id'], 'label': '중립', 'score': 0} for r in batch_rows]
+        id_to_result.update({r['id']: r for r in results})
         print("완료")
         time.sleep(2)  # 무료 15 RPM 대응
 

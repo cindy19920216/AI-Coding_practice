@@ -44,8 +44,9 @@ BASE_DIR     = r'C:\Users\Check\Desktop\AI 금융_FINAL'
 RESULT_PATH  = os.path.join(BASE_DIR, 'results')
 TG_DATA_PATH = os.path.join(BASE_DIR, 'telegram_data')
 
-GEMINI_API_KEY    = os.environ.get('GEMINI_API_KEY', '')  # 여기에 직접 입력 가능
-GEMINI_MODEL      = 'gemini-1.5-flash'
+_KEY_LITERAL      = 'AIzaSyD57u-7JcX8iwxjJxyiQ5NBHV0QeJMgf_A'   # 파일에 직접 입력된 키
+GEMINI_API_KEY    = os.environ.get('GEMINI_API_KEY', _KEY_LITERAL)  # 환경변수 우선, 없으면 위 키 사용
+GEMINI_MODEL      = 'gemini-3.1-flash-lite'   # 할당량 여유 있음 (2025-06-01 확인)
 GEMINI_BATCH_SIZE = 20
 
 FEATURES = ['sentiment_score', 'sentiment_ma3', 'sentiment_ma5',
@@ -82,12 +83,12 @@ def _parse_gemini_json(text: str, fallback_ids: list) -> list:
 
 def run_gemini_sentiment(news_df: pd.DataFrame, api_key: str) -> pd.DataFrame:
     try:
-        import google.generativeai as genai
+        from google import genai
+        from google.genai import types as genai_types
     except ImportError:
-        raise ImportError("pip install google-generativeai 실행 후 재시도하세요.")
+        raise ImportError("pip install google-genai 실행 후 재시도하세요.")
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(GEMINI_MODEL, system_instruction=_GEMINI_SYSTEM)
+    client = genai.Client(api_key=api_key)
 
     df = news_df.copy().reset_index(drop=True)
     total = len(df)
@@ -107,15 +108,37 @@ def run_gemini_sentiment(news_df: pd.DataFrame, api_key: str) -> pd.DataFrame:
             "출력 형식: [{\"id\":0,\"label\":\"긍정\",\"score\":1}, ...]"
         )
         print(f"  [{start+1}~{end}/{total}]", end=" ", flush=True)
-        try:
-            resp = model.generate_content(prompt)
-            results = _parse_gemini_json(resp.text, [r['id'] for r in batch_rows])
-        except Exception as e:
-            print(f"오류({e})", end=" ")
+        results = None
+        for attempt in range(5):  # 최대 5회 재시도
+            try:
+                resp = client.models.generate_content(
+                    model=GEMINI_MODEL,
+                    contents=prompt,
+                    config=genai_types.GenerateContentConfig(
+                        system_instruction=_GEMINI_SYSTEM,
+                        temperature=0.1,
+                    ),
+                )
+                results = _parse_gemini_json(resp.text, [r['id'] for r in batch_rows])
+                break
+            except Exception as e:
+                err_str = str(e)
+                if '429' in err_str or 'RESOURCE_EXHAUSTED' in err_str:
+                    wait = 60 * (attempt + 1)
+                    print(f"\n  Rate limit — {wait}초 대기...", end=" ", flush=True)
+                    time.sleep(wait)
+                elif '503' in err_str or 'UNAVAILABLE' in err_str:
+                    wait = 10 * (attempt + 1)  # 10, 20, 30, 40, 50초
+                    print(f"\n  503 과부하 — {wait}초 대기...", end=" ", flush=True)
+                    time.sleep(wait)
+                else:
+                    print(f"오류({e})", end=" ")
+                    break
+        if results is None:
             results = [{'id': r['id'], 'label': '중립', 'score': 0} for r in batch_rows]
         id_to_result.update({r['id']: r for r in results})
         print("완료")
-        time.sleep(2)  # 15 RPM 제한 대응
+        time.sleep(10)  # 6 RPM — rate limit 방지 (10 RPM 한도의 60%만 사용)
 
     rows = []
     for i, row in df.iterrows():
@@ -242,12 +265,21 @@ def get_stock_data(monthly_tops: dict, theme_code_map: dict, krx300_codes: set) 
 
 if __name__ == '__main__':
     if not GEMINI_API_KEY:
-        print("=" * 55)
         print("GEMINI_API_KEY가 설정되지 않았습니다.")
-        print("  1. https://aistudio.google.com/apikey 에서 무료 발급")
-        print("  2. 터미널에서: set GEMINI_API_KEY=your_key")
-        print("  3. 또는 이 파일 상단 GEMINI_API_KEY 변수에 직접 입력")
-        print("=" * 55)
+        sys.exit(1)
+
+    # API 키 사전 검증 (전체 실행 전에 빠르게 확인)
+    print("Gemini API 키 검증 중...")
+    try:
+        from google import genai as _genai
+        _client    = _genai.Client(api_key=GEMINI_API_KEY)
+        _test_resp = _client.models.generate_content(
+            model=GEMINI_MODEL, contents="테스트"
+        )
+        print(f"API 키 검증 성공! (모델: {GEMINI_MODEL})")
+    except Exception as _e:
+        print(f"\n[오류] Gemini API 키 또는 모델 오류: {_e}")
+        print("  → https://aistudio.google.com/apikey 에서 키를 다시 확인하세요.")
         sys.exit(1)
 
     os.makedirs(RESULT_PATH, exist_ok=True)
