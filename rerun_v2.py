@@ -687,11 +687,17 @@ merged = merged[merged['date'] < '2026-06-01']
 sentiment_df = sentiment_df[sentiment_df['date'] < '2026-06-01']
 valid_months = [m for m in monthly_tops_final.keys() if m != '2026-06']
 
-# monthly_tops_final 필터링
+# monthly_tops_final 필터링 + 빈 자리 채우기 (제외 테마 자리를 텔레그램 6~10위로 보완)
 monthly_tops_filtered = {}
 for m, tops in monthly_tops_final.items():
     if m == '2026-06': continue
     filtered_tops = [t for t in tops if t in valid_themes]
+    if len(filtered_tops) < TOP_N and m in monthly_tops_str:
+        for t in monthly_tops_str[m]:
+            if t in valid_themes and t not in filtered_tops:
+                filtered_tops.append(t)
+            if len(filtered_tops) >= TOP_N:
+                break
     if filtered_tops:
         monthly_tops_filtered[m] = filtered_tops
 
