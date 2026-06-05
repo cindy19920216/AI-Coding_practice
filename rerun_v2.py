@@ -67,15 +67,71 @@ TICKER_MAP = {
         '네오위즈홀딩스':     '095660',
         '카카오':             '035720',
     },
+    'HBM': {
+        '삼성전자':     '005930',
+        'SK하이닉스':   '000660',
+        '한미반도체':   '042700',
+        '피에스케이홀딩스': '031980',
+        '테크윙':       '089030',
+        '케이씨텍':     '281820',
+        '이오테크닉스':  '039030',
+        'ISC':         '095340',
+        '와이씨':       '232140',
+        '고영':         '098460',
+        '한화비전':     '489790',
+    },
+    '조선': {
+        'HD한국조선해양': '009540',
+        '삼성중공업':    '010140',
+        '한화오션':     '042660',
+        'HD현대중공업':  '329180',
+        'HD현대미포':    '010620',
+        'HJ중공업':     '097230',
+    },
+    'LNG': {
+        '한국가스공사':   '036460',
+        'SK가스':       '018670',
+        '한화엔진':      '082740',
+        '비에이치아이':   '083650',
+    },
 }
 
 FEATURES = [
     'sentiment_score', 'sentiment_ma3', 'sentiment_ma5', 'news_count',
+    'stock_sentiment',
     'return_1d', 'return_5d',
     'volume_change', 'high_52w_ratio', 'kospi_relative',
     'tg_mention_count', 'tg_mention_ma3', 'tg_news_ratio',
 ]
 TARGET = 'up_next'
+
+# 테마명 자체가 너무 일반적인 단어 → 종목명 직접 언급만 카운트
+# 통신: "광통신", "무선통신" 등 False Positive 방지
+# 조선: "조선일보", "조선왕조" 등 비투자 컨텍스트 방지
+THEME_STOCK_ONLY = {'통신', '조선'}
+
+# 2글자 이하 짧은 종목명 목록 (단어 경계 매칭 필요)
+SHORT_TICKERS = {'KT', 'SK', 'GS', 'LG', 'NC', 'SI'}
+
+
+def _build_tg_pattern(theme: str, stocks: list) -> str | None:
+    """
+    텔레그램 검색 패턴 생성.
+    - THEME_STOCK_ONLY 테마: 테마명 제외, 종목명만 사용
+    - SHORT_TICKERS: 앞뒤 비한글·비알파벳 경계 적용
+    """
+    parts = []
+    if theme not in THEME_STOCK_ONLY:
+        parts.append(re.escape(theme))
+    for s in stocks:
+        if len(s) <= 1:
+            continue
+        if s in SHORT_TICKERS:
+            # 앞뒤가 한글·영문·숫자가 아닌 경우만 매칭
+            parts.append(r'(?<![가-힣A-Za-z0-9])' + re.escape(s) + r'(?![가-힣A-Za-z0-9])')
+        else:
+            parts.append(re.escape(s))
+    return '|'.join(parts) if parts else None
 
 # ──────────────────────────────────────────────────────────────
 # 기존 결과 로드
@@ -88,13 +144,17 @@ monthly_top_df = pd.read_csv(os.path.join(RESULT_PATH, 'monthly_top_themes.csv')
 sentiment_df   = pd.read_csv(os.path.join(RESULT_PATH, 'sentiment_result.csv'))
 sentiment_df['date'] = pd.to_datetime(sentiment_df['date'], errors='coerce')
 
+# Derive all_themes from sentiment_df to include all themes with news data
+all_themes = set(sentiment_df['theme'].unique())
+
 # monthly_tops: {str_month: [theme, ...]}
 monthly_tops_str = {}
 for _, row in monthly_top_df.iterrows():
     m = str(row['month'])
-    monthly_tops_str.setdefault(m, []).append(row['theme'])
+    # Only keep themes that are in all_themes (have news)
+    if row['theme'] in all_themes:
+        monthly_tops_str.setdefault(m, []).append(row['theme'])
 
-all_themes = set(t for tops in monthly_tops_str.values() for t in tops)
 print(f"로드 완료: {len(monthly_tops_str)}개월 / 테마: {sorted(all_themes)}")
 print(f"감성 분석: {len(sentiment_df):,}건")
 
@@ -106,7 +166,7 @@ headers        = {'User-Agent': 'Mozilla/5.0'}
 theme_map      = {}   # {theme: [stock_name]}
 theme_code_map = {}   # {theme: {stock_name: code}}
 
-for page in range(1, 8):
+for page in range(1, 11):
     url = f"https://finance.naver.com/sise/theme.naver?&page={page}"
     try:
         res = requests.get(url, headers=headers, timeout=10)
@@ -159,6 +219,61 @@ for theme, ticker_dict in TICKER_MAP.items():
 print(f"코드 수집 완료: {len(theme_code_map)}개 테마")
 
 # ──────────────────────────────────────────────────────────────
+# STEP 3.5. 텔레그램 기반 월별 TOP 테마 재산출 (수정된 키워드 로직)
+# - 통신/조선 등 일반 단어 False Positive 제거
+# - 짧은 종목명(KT 등) 단어 경계 적용
+# ──────────────────────────────────────────────────────────────
+print("\n" + "=" * 60)
+print("STEP 3.5. 텔레그램 월별 TOP 테마 재산출 (노이즈 필터 적용)")
+print("=" * 60)
+
+from collections import Counter as _Counter
+
+_tg_files_all = sorted([
+    os.path.join(TG_DATA_PATH, f) for f in os.listdir(TG_DATA_PATH)
+    if f.startswith('telegram_data_') and f.endswith('.csv')
+])
+_tg_raw = pd.concat([pd.read_csv(f) for f in _tg_files_all], ignore_index=True)
+_tg_raw['Date']    = pd.to_datetime(_tg_raw['Date'])
+_tg_raw['month']   = _tg_raw['Date'].dt.to_period('M').astype(str)
+_tg_raw['Message'] = _tg_raw['Message'].astype(str)
+
+# 테마별 검색 패턴 사전 컴파일
+_compiled = {}
+for _theme in all_themes:
+    _stocks = theme_map.get(_theme, [])
+    _pat    = _build_tg_pattern(_theme, _stocks)
+    if _pat:
+        try:
+            _compiled[_theme] = re.compile(_pat)
+        except re.error:
+            _compiled[_theme] = re.compile(re.escape(_theme))
+
+monthly_tops_str = {}   # 기존 CSV 기반 데이터 덮어쓰기
+for _month in sorted(_tg_raw['month'].unique()):
+    if _month == '2026-06':
+        continue
+    _msgs   = _tg_raw[_tg_raw['month'] == _month]['Message'].tolist()
+    _counts = _Counter()
+    for _msg in _msgs:
+        _seen = set()
+        for _theme, _cpat in _compiled.items():
+            if _theme in _seen:
+                continue
+            if _cpat.search(_msg):
+                _counts[_theme] += 1
+                _seen.add(_theme)
+    _top = [t for t, _ in _counts.most_common(TOP_N * 2)]  # 여유분 확보
+    monthly_tops_str[_month] = _top
+    _top_display = [f"{t}({_counts[t]})" for t in _top[:TOP_N]]
+    print(f"  {_month}: {' / '.join(_top_display)}")
+
+print(f"\n[통신 월별 순위 확인]")
+for _m, _tops in sorted(monthly_tops_str.items()):
+    _rank = _tops.index('통신') + 1 if '통신' in _tops else '-'
+    print(f"  {_m}: 통신 순위={_rank}")
+
+# ──────────────────────────────────────────────────────────────
 # STEP 4. 뉴스 감성점수 기반 테마 재선정
 # ──────────────────────────────────────────────────────────────
 print("\n" + "=" * 60)
@@ -196,7 +311,8 @@ for month_str, candidates in sorted(monthly_tops_str.items()):
     monthly_tops_final[month_str] = top
     print(f"  {month_str}: {' / '.join(top)}")
 
-all_final_themes = set(t for tops in monthly_tops_final.values() for t in tops)
+# Ensure all themes with news data (including MLCC) are included for analysis
+all_final_themes = all_themes
 
 # ──────────────────────────────────────────────────────────────
 # STEP 5. 텔레그램 언급량 피처 생성
@@ -218,9 +334,11 @@ if tg_files:
 
     all_rows = []
     for theme in all_final_themes:
-        stocks   = theme_map.get(theme, [])
-        keywords = [theme] + [s for s in stocks if len(s) > 1]
-        pattern  = '|'.join(map(re.escape, keywords))
+        stocks  = theme_map.get(theme, [])
+        pattern = _build_tg_pattern(theme, stocks)
+        if pattern is None:
+            print(f"  [{theme}] 패턴 없음 - skip")
+            continue
         try:
             mask = tg_df['Message'].str.contains(pattern, na=False, regex=True)
         except re.error:
@@ -345,6 +463,24 @@ for theme in all_final_themes:
         df['volume_change']  = df['volume'].pct_change()
         df['high_52w']       = df['high'].rolling(252, min_periods=1).max()
         df['high_52w_ratio'] = df['close'] / df['high_52w'].replace(0, np.nan)
+
+        # RSI 14일
+        _delta = df['close'].diff()
+        _gain  = _delta.clip(lower=0).rolling(14, min_periods=1).mean()
+        _loss  = (-_delta.clip(upper=0)).rolling(14, min_periods=1).mean()
+        df['rsi_14'] = 100 - (100 / (1 + _gain / _loss.replace(0, np.nan)))
+
+        # 볼린저밴드 위치: (close - lower) / (upper - lower)
+        _ma20  = df['close'].rolling(20, min_periods=1).mean()
+        _std20 = df['close'].rolling(20, min_periods=1).std().replace(0, np.nan)
+        df['bb_position']  = (df['close'] - (_ma20 - 2 * _std20)) / (4 * _std20)
+
+        # 20일 수익률 변동성 (개별 종목 리스크)
+        df['volatility_20'] = df['return_1d'].rolling(20, min_periods=5).std()
+
+        # 20일 이동평균 대비 현재가 (추세 위치)
+        df['ma_ratio'] = df['close'] / _ma20.replace(0, np.nan)
+
         df['stock']  = sname
         df['ticker'] = ticker
         df['theme']  = theme
@@ -366,6 +502,49 @@ else:
 print(f"\n주가 수집 완료: {stock_df['stock'].nunique()}개 종목 / {stock_df['theme'].nunique()}개 테마")
 
 # ──────────────────────────────────────────────────────────────
+# 거래일 캘린더 + 헬퍼 함수
+# ──────────────────────────────────────────────────────────────
+_trading_days = np.sort(stock_df['date'].dropna().unique())
+
+def _next_trading_day(dates: pd.Series) -> pd.Series:
+    """달력 +1일 대신 실제 다음 거래일 반환 (주말·휴장일 자동 스킵)"""
+    result = []
+    for d in pd.to_datetime(dates):
+        if pd.isna(d):
+            result.append(pd.NaT)
+            continue
+        idx = np.searchsorted(_trading_days, np.datetime64(d), side='right')
+        result.append(pd.Timestamp(_trading_days[idx]) if idx < len(_trading_days) else pd.NaT)
+    return pd.Series(result, index=dates.index, dtype='datetime64[ns]')
+
+def _compute_stock_sentiment(sent_df: pd.DataFrame, tmap: dict) -> pd.DataFrame:
+    """기사 제목에서 종목명 탐색 → 종목별 일별 감성점수 산출"""
+    rows = []
+    for theme, stocks in tmap.items():
+        tsub = sent_df[sent_df['theme'] == theme]
+        if tsub.empty:
+            continue
+        for stock in stocks:
+            if len(stock) < 2:
+                continue
+            mask = tsub['title'].str.contains(re.escape(stock), na=False)
+            if mask.sum() < 2:
+                continue
+            matched = tsub.loc[mask, ['date', 'score']].copy()
+            matched['stock'] = stock
+            rows.append(matched)
+    if not rows:
+        print("  종목 직접 언급 기사 없음 → sentiment_score로 대체")
+        return pd.DataFrame(columns=['date', 'stock', 'stock_sentiment'])
+    df = pd.concat(rows, ignore_index=True)
+    df['date'] = pd.to_datetime(df['date']).dt.normalize()
+    out = (df.groupby(['date', 'stock'])['score']
+             .mean().reset_index()
+             .rename(columns={'score': 'stock_sentiment'}))
+    print(f"  종목 직접 언급 기사: {len(df)}건 / {out['stock'].nunique()}개 종목")
+    return out
+
+# ──────────────────────────────────────────────────────────────
 # STEP 7. 전체 병합
 # ──────────────────────────────────────────────────────────────
 print("\n" + "=" * 60)
@@ -379,7 +558,9 @@ sent = (
     .reset_index()
 )
 sent['date']      = pd.to_datetime(sent['date']).dt.normalize()
-sent['date_next'] = sent['date'] + pd.Timedelta(days=1)
+sent['date_next'] = _next_trading_day(sent['date'])
+sent = sent.dropna(subset=['date_next'])
+print(f"  거래일 기준 매핑: {len(sent)}건 (주말·휴장일 자동 스킵)")
 
 merged = pd.merge(
     stock_df,
@@ -408,6 +589,23 @@ merged['tg_mention_count'] = merged['tg_mention_count'].fillna(0)
 merged['tg_mention_ma3']   = merged['tg_mention_ma3'].fillna(0)
 merged['tg_news_ratio']    = merged['tg_mention_count'] / (merged['news_count'] + 1)
 
+# 종목별 감성점수 병합 (기사에서 종목명 직접 언급된 경우에만 반영)
+print("\n종목별 감성점수 산출 중...")
+stock_sent_df = _compute_stock_sentiment(sentiment_df, theme_map)
+if not stock_sent_df.empty:
+    stock_sent_df['date_trading'] = _next_trading_day(stock_sent_df['date'])
+    stock_sent_df = stock_sent_df.dropna(subset=['date_trading'])
+    merged = pd.merge(
+        merged,
+        stock_sent_df[['date_trading', 'stock', 'stock_sentiment']],
+        left_on=['date', 'stock'], right_on=['date_trading', 'stock'],
+        how='left'
+    ).drop(columns=['date_trading'])
+else:
+    merged['stock_sentiment'] = np.nan
+# 언급 없는 종목은 테마 감성점수로 대체
+merged['stock_sentiment'] = merged['stock_sentiment'].fillna(merged['sentiment_score'])
+
 merged = merged.dropna(subset=['return_1d', 'sentiment_score'])
 print(f"병합 완료: {len(merged):,}행 / {merged['stock'].nunique()}개 종목")
 
@@ -415,7 +613,7 @@ print(f"병합 완료: {len(merged):,}행 / {merged['stock'].nunique()}개 종�
 # STEP 8. XGBoost (12개 피처)
 # ──────────────────────────────────────────────────────────────
 print("\n" + "=" * 60)
-print("STEP 8. XGBoost 학습 (12개 피처)")
+print("STEP 8. XGBoost 학습 (13개 피처)")
 print("=" * 60)
 
 avail   = [f for f in FEATURES if f in merged.columns]
@@ -459,11 +657,43 @@ print("\n[피처 중요도]")
 print(importance.to_string(index=False))
 
 # ──────────────────────────────────────────────────────────────
-# STEP 9. 최종 랭킹 + 시각화 7종
+# STEP 9. 최종 랭킹 + 시각화 7종 (데이터 충분한 테마 위주 필터링)
 # ──────────────────────────────────────────────────────────────
 print("\n" + "=" * 60)
 print("STEP 9. 최종 랭킹 + 시각화")
 print("=" * 60)
+
+# 분석 가치가 떨어지는 소표본 테마 필터링
+valid_themes = sentiment_df['theme'].value_counts()
+valid_themes = valid_themes[valid_themes >= 40].index.tolist()
+
+# 명시적 제외 테마
+if 'SI' in valid_themes: valid_themes.remove('SI')
+if '은행' in valid_themes: valid_themes.remove('은행')
+
+# 명시적으로 제외할 테마 (예: 두나무 - 데이터 기간 부족)
+if '두나무' in valid_themes: valid_themes.remove('두나무')
+
+print(f"분석 대상 테마 선정: {len(valid_themes)}개")
+print(f"제외된 테마: {set(sentiment_df['theme'].unique()) - set(valid_themes)}")
+
+# 모든 데이터셋에 필터 적용 (일관성 유지)
+merged = merged[merged['theme'].isin(valid_themes)]
+stock_prob = stock_prob[stock_prob['theme'].isin(valid_themes)]
+sentiment_df = sentiment_df[sentiment_df['theme'].isin(valid_themes)]
+
+# 2026년 6월 데이터 제외 (불완전한 달 제거)
+merged = merged[merged['date'] < '2026-06-01']
+sentiment_df = sentiment_df[sentiment_df['date'] < '2026-06-01']
+valid_months = [m for m in monthly_tops_final.keys() if m != '2026-06']
+
+# monthly_tops_final 필터링
+monthly_tops_filtered = {}
+for m, tops in monthly_tops_final.items():
+    if m == '2026-06': continue
+    filtered_tops = [t for t in tops if t in valid_themes]
+    if filtered_tops:
+        monthly_tops_filtered[m] = filtered_tops
 
 corr_list = []
 for stock, grp in merged.groupby('stock'):
@@ -496,17 +726,24 @@ for theme in all_themes_sorted:
               f"{r.get('sentiment_corr', float('nan')):>+9.3f} {r['total_score']:>9.3f}")
 print("=" * 65)
 
-final.to_csv(os.path.join(RESULT_PATH, 'final_theme_stocks.csv'),
-             index=False, encoding='utf-8-sig')
-print("final_theme_stocks.csv 저장")
+try:
+    final.to_csv(os.path.join(RESULT_PATH, 'final_theme_stocks.csv'),
+                 index=False, encoding='utf-8-sig')
+    print("final_theme_stocks.csv 저장")
+except Exception as e:
+    print(f"final_theme_stocks.csv 저장 실패: {e}")
 
 # ── 차트 1: 월별 테마 변화표 ──────────────────────────────────
 monthly_final_df = pd.DataFrame([
     {'month': m, 'rank': i + 1, 'theme': t}
-    for m, tops in monthly_tops_final.items() for i, t in enumerate(tops)
+    for m, tops in monthly_tops_filtered.items() for i, t in enumerate(tops)
 ])
-monthly_final_df.to_csv(os.path.join(RESULT_PATH, 'monthly_top_themes.csv'),
-                        index=False, encoding='utf-8-sig')
+try:
+    monthly_final_df.to_csv(os.path.join(RESULT_PATH, 'monthly_top_themes.csv'),
+                            index=False, encoding='utf-8-sig')
+    print("monthly_top_themes.csv 저장")
+except Exception as e:
+    print(f"monthly_top_themes.csv 저장 실패: {e}")
 
 rank_pivot = monthly_final_df.pivot(index='month', columns='rank', values='theme')
 rank_pivot.columns = [f'{c}위' for c in rank_pivot.columns]
