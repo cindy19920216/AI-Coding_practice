@@ -321,15 +321,57 @@ subsample=0.8, colsample_bytree=0.8
 
 ## 7. 시각화 결과물 (`results/`)
 
+### Chart 1 — 월별 TOP5 테마 변화 히트맵
+> 월별 뉴스 감성 기반 TOP5 테마 순위를 히트맵 형태로 시각화
+
+![chart1](results/chart1_monthly_theme_change.png)
+
+---
+
+### Chart 2 — 테마별 핵심 관련주 상승 확률
+> 테마별 핵심 관련주의 XGBoost 예측 상승 확률 수평 막대 차트 (빨강: 55% 초과)
+
+![chart2](results/chart2_top_stocks.png)
+
+---
+
+### Chart 3 — 감성점수 vs 익일 수익률 산점도
+> 테마별 뉴스 감성점수(t일)와 익일 수익률(t+1일) 간 산점도 + 추세선 + 피어슨 상관계수
+
+![chart3](results/chart3_sentiment_corr.png)
+
+---
+
+### Chart 4 — 월별 × 테마별 뉴스 감성점수 히트맵
+> Gemini LLM이 산출한 감성점수를 월별 × 테마별로 집계한 히트맵
+
+![chart4](results/chart4_sentiment_heatmap.png)
+
+---
+
+### Chart 5 — 텔레그램 월별 테마 언급량 추이
+> 10개 테마의 월별 텔레그램 언급량 시계열 (시장반응 피처)
+
+![chart5](results/chart5_tg_mention_trend.png)
+
+---
+
+### Chart 6 — XGBoost 피처 중요도
+> 13개 피처의 XGBoost Feature Importance (1위: tg_news_ratio — 빨간색 강조)
+
+![chart6](results/chart6_feature_importance.png)
+
+---
+
+### Chart 7 — 텔레그램/뉴스 비율 히트맵 (과열 감지)
+> 텔레그램 언급량 ÷ 뉴스 건수 비율. 값이 높을수록 뉴스 대비 수급 과열 상태
+
+![chart7](results/chart7_tg_news_ratio.png)
+
+---
+
 | 파일명 | 내용 |
 |--------|------|
-| `chart1_monthly_theme_change.png` | 월별 뉴스 감성 기반 TOP5 테마 변화 테이블 (히트맵 형태) |
-| `chart2_top_stocks.png` | 테마별 핵심 관련주 상승 확률 수평 막대 차트 (빨강: 55% 초과, 파랑: 이하) |
-| `chart3_sentiment_corr.png` | 테마별 감성점수 vs 익일 수익률 산점도 + 추세선 + 상관계수 표기 |
-| `chart4_sentiment_heatmap.png` | 월별 × 테마별 Gemini 감성점수 히트맵 (RdYlGn 컬러맵) |
-| `chart5_tg_mention_trend.png` | 텔레그램 월별 테마 언급량 시계열 추이 |
-| `chart6_feature_importance.png` | XGBoost 13개 피처 중요도 수평 막대 차트 |
-| `chart7_tg_news_ratio.png` | 월별 텔레그램/뉴스 비율 히트맵 — 과열 섹터 감지용 |
 | `final_theme_stocks.csv` | 테마별 관련주 종합 랭킹 (avg_up_prob, sentiment_corr, total_score 등 전체 지표) |
 | `monthly_top_themes.csv` | 월별 TOP 테마 순위 데이터 |
 | `sentiment_result.csv` | 뉴스 기사별 Gemini 감성 분석 결과 원본 |
